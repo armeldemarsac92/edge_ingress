@@ -1,0 +1,75 @@
+---
+edge_public_root_domain: "{{ lookup('env', 'EDGE_PUBLIC_ROOT_DOMAIN') | default('example.net', true) }}"
+edge_private_dns_zone: "{{ lookup('env', 'EDGE_PRIVATE_DNS_ZONE') | default('apps.' ~ edge_public_root_domain, true) }}"
+
+# Public host suffixes accepted by the edge proxy for HTTP Host and TLS SNI.
+edge_public_domains: "{{ lookup('env', 'EDGE_PUBLIC_DOMAINS') | default(edge_public_root_domain, true) | split(',') | map('trim') | list }}"
+
+# Private DNS zones forwarded over WireGuard to the OpenStack DNS layer.
+edge_private_dns_zones: "{{ lookup('env', 'EDGE_PRIVATE_DNS_ZONES') | default(edge_private_dns_zone, true) | split(',') | map('trim') | list }}"
+
+# Backwards-compatible primary zone name for older tasks or ad hoc commands.
+edge_domain: "{{ edge_private_dns_zones[0] }}"
+edge_vps_inventory_name: edge1
+edge_vps_loopback_addr: "{{ lookup('env', 'EDGE_VPS_LOOPBACK_ADDR') | default('10.250.255.1/32', true) }}"
+
+provider_cidr: "{{ lookup('env', 'EDGE_PROVIDER_CIDR') | default('10.200.0.0/24', true) }}"
+provider_gateway_ip: "{{ lookup('env', 'EDGE_PROVIDER_GATEWAY_IP') | default('10.200.0.1', true) }}"
+
+edge_management_cidrs:
+  - "{{ lookup('env', 'EDGE_MANAGEMENT_CIDR_1') | default('10.210.0.0/24', true) }}"
+  - "{{ lookup('env', 'EDGE_MANAGEMENT_CIDR_2') | default('10.220.0.0/24', true) }}"
+  - "{{ lookup('env', 'EDGE_MANAGEMENT_CIDR_3') | default('10.230.0.0/24', true) }}"
+  - "{{ lookup('env', 'EDGE_MANAGEMENT_CIDR_4') | default('10.240.0.0/24', true) }}"
+
+edge_wireguard_link_prefix: "{{ lookup('env', 'EDGE_WIREGUARD_LINK_PREFIX') | default('10.250', true) }}"
+
+wireguard_links:
+  edge-node1:
+    edge_node_id: 1
+    vps_if: wg-os1
+    node_if: wg-vps
+    vps_addr: "{{ edge_wireguard_link_prefix }}.11.1/30"
+    node_addr: "{{ edge_wireguard_link_prefix }}.11.2/30"
+    vps_listen_port: 51811
+  edge-node2:
+    edge_node_id: 2
+    vps_if: wg-os2
+    node_if: wg-vps
+    vps_addr: "{{ edge_wireguard_link_prefix }}.12.1/30"
+    node_addr: "{{ edge_wireguard_link_prefix }}.12.2/30"
+    vps_listen_port: 51812
+  edge-node3:
+    edge_node_id: 3
+    vps_if: wg-os3
+    node_if: wg-vps
+    vps_addr: "{{ edge_wireguard_link_prefix }}.13.1/30"
+    node_addr: "{{ edge_wireguard_link_prefix }}.13.2/30"
+    vps_listen_port: 51813
+
+edge_dns_forwarders: "{{ wireguard_links | dict2items | map(attribute='value.node_addr') | map('regex_replace', '/.*$', '') | list }}"
+
+edge_designate_forwarder_prefix: "{{ lookup('env', 'EDGE_DESIGNATE_FORWARDER_PREFIX') | default('10.220.0', true) }}"
+
+designate_dns_forwarders:
+  - "{{ edge_designate_forwarder_prefix }}.11@53"
+  - "{{ edge_designate_forwarder_prefix }}.12@53"
+  - "{{ edge_designate_forwarder_prefix }}.13@53"
+
+edge_tcp_port_pool_start: 30000
+edge_tcp_port_pool_end: 39999
+
+edge_routing_mode: frr
+
+edge_node_snat_prefix: "{{ lookup('env', 'EDGE_NODE_SNAT_PREFIX') | default('10.200.0', true) }}"
+
+# Override with reserved provider-network addresses after Phase 0 discovery.
+edge_node_snat_ips:
+  edge-node1: "{{ edge_node_snat_prefix }}.11"
+  edge-node2: "{{ edge_node_snat_prefix }}.12"
+  edge-node3: "{{ edge_node_snat_prefix }}.13"
+
+edge_tcp_forwards: []
+
+edge_minecraft_enabled: false
+edge_minecraft_routes: []

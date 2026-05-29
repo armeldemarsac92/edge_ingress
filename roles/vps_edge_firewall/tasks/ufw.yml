@@ -1,0 +1,138 @@
+---
+- name: Refresh apt cache before UFW package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install UFW package
+  ansible.builtin.package:
+    name: "{{ edge_firewall_ufw_packages[ansible_os_family] | default(edge_firewall_ufw_packages.Debian) }}"
+    state: present
+
+- name: Set UFW incoming default policy
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set UFW outgoing default policy
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Set UFW routed default policy
+  community.general.ufw:
+    direction: routed
+    policy: "{{ edge_firewall_ufw_route_policy }}"
+
+- name: Set UFW logging
+  community.general.ufw:
+    logging: "{{ edge_firewall_ufw_logging }}"
+
+- name: Deny configured scanner sources
+  community.general.ufw:
+    rule: deny
+    from_ip: "{{ item.source | default(item) }}"
+    comment: "{{ item.comment | default(omit) }}"
+  loop: "{{ edge_firewall_denied_sources }}"
+  loop_control:
+    label: "{{ item.source | default(item) }}"
+
+- name: Build UFW public TCP port list
+  ansible.builtin.set_fact:
+    edge_firewall_ufw_public_tcp_ports: >-
+      {{
+        ([edge_firewall_ssh_port | int, 80, 443]
+        + ([25565] if edge_minecraft_enabled | default(false) | bool else [])
+        + (edge_tcp_forwards | default([]) | map(attribute='public_port') | map('int') | list)
+        + (edge_firewall_public_tcp_ports_extra | map('int') | list))
+        | unique
+        | list
+      }}
+
+- name: Allow public TCP ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ edge_firewall_ufw_public_tcp_ports }}"
+  loop_control:
+    label: "{{ item }}/tcp"
+
+- name: Allow WireGuard ports from configured sources
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.0 }}"
+    port: "{{ item.1.value.vps_listen_port }}"
+    proto: udp
+  loop: "{{ edge_firewall_wireguard_sources | product(wireguard_links | dict2items) | list }}"
+  loop_control:
+    label: "{{ item.0 }} -> {{ item.1.value.vps_listen_port }}/udp"
+  when: edge_firewall_wireguard_sources | length > 0
+
+- name: Allow WireGuard ports from anywhere
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.value.vps_listen_port }}"
+    proto: udp
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_listen_port }}/udp"
+  when: edge_firewall_wireguard_sources | length == 0
+
+- name: Allow BGP from WireGuard peers
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.value.node_addr.split('/')[0] }}"
+    interface: "{{ item.value.vps_if }}"
+    direction: in
+    port: "179"
+    proto: tcp
+    comment: "BGP {{ item.value.vps_if }} peer"
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_if }} bgp"
+
+- name: Allow single-hop BFD from WireGuard peers
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.value.node_addr.split('/')[0] }}"
+    interface: "{{ item.value.vps_if }}"
+    direction: in
+    port: "3784"
+    proto: udp
+    comment: "BFD {{ item.value.vps_if }} peer"
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_if }} bfd"
+
+- name: Allow multihop BFD from WireGuard peers
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.value.node_addr.split('/')[0] }}"
+    interface: "{{ item.value.vps_if }}"
+    direction: in
+    port: "4784"
+    proto: udp
+    comment: "BFD multihop {{ item.value.vps_if }} peer"
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_if }} bfd multihop"
+
+- name: Allow dynamic BFD source ports from WireGuard peers
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.value.node_addr.split('/')[0] }}"
+    interface: "{{ item.value.vps_if }}"
+    direction: in
+    port: "49152:65535"
+    proto: udp
+    comment: "BFD dynamic {{ item.value.vps_if }} peer"
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_if }} bfd dynamic"
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+  when: not ansible_check_mode

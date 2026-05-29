@@ -1,0 +1,12 @@
+---
+- name: Phase 4 - configure Authentik identity broker on the edge VPS
+  hosts: edge_vps
+  gather_facts: true
+  become: true
+  roles:
+    - role: vps_authentik
+      tags: [authentik]
+    - role: vps_edge_security
+      tags: [security, crowdsec, fail2ban]
+    - role: vps_edge_proxy
+      tags: [proxy]

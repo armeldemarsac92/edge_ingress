@@ -1,0 +1,15 @@
+---
+edge_gateway_nft_service_name: vps-edge-gateway-nftables
+edge_gateway_nft_config_path: /etc/nftables.d/vps-edge-gateway.nft
+edge_gateway_snat_service_name: vps-edge-snat-address
+edge_gateway_nft_bin: /usr/sbin/nft
+edge_gateway_ip_bin: /usr/sbin/ip
+edge_gateway_use_snat: true
+edge_gateway_configure_snat_address: false
+edge_gateway_provider_probe_ip: "{{ provider_gateway_ip }}"
+
+edge_gateway_packages:
+  Debian:
+    - nftables
+  RedHat:
+    - nftables

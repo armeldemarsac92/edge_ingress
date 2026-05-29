@@ -1,0 +1,28 @@
+# Ansible managed: resolver exposed only on the VPS WireGuard link.
+server:
+    username: "{{ openstack_edge_dns_user }}"
+    directory: "/etc/unbound"
+    pidfile: "/run/{{ openstack_edge_dns_service_name }}/unbound.pid"
+    interface: {{ wireguard_links[openstack_edge_dns_node_name].node_addr.split('/')[0] }}
+    port: 53
+    do-ip4: yes
+    do-ip6: no
+    do-udp: yes
+    do-tcp: yes
+    access-control: 0.0.0.0/0 refuse
+    access-control: {{ wireguard_links[openstack_edge_dns_node_name].vps_addr.split('/')[0] }}/32 allow
+    hide-identity: yes
+    hide-version: yes
+    harden-glue: yes
+    harden-dnssec-stripped: yes
+    use-syslog: yes
+    verbosity: 1
+    private-address: {{ provider_cidr }}
+
+{% for zone in edge_private_dns_zones %}
+forward-zone:
+    name: "{{ zone }}."
+{% for forwarder in designate_dns_forwarders %}
+    forward-addr: {{ forwarder }}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,31 @@
+# Ansible managed: VPS edge forwarding rules for {{ inventory_hostname }}.
+table inet vps_edge_gateway {
+    set edge_management_cidrs {
+        type ipv4_addr;
+        flags interval;
+        elements = { {{ edge_management_cidrs | join(', ') }} };
+    }
+
+    chain input {
+        type filter hook input priority filter; policy accept;
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip saddr {{ wireguard_links[edge_gateway_node_name].vps_addr.split('/')[0] }}/32 udp dport 53 accept
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip saddr {{ wireguard_links[edge_gateway_node_name].vps_addr.split('/')[0] }}/32 tcp dport 53 accept
+    }
+
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+        ct state established,related accept
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip daddr @edge_management_cidrs drop
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip daddr {{ provider_cidr }} accept
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" drop
+    }
+}
+{% if edge_gateway_use_snat | bool %}
+
+table ip vps_edge_gateway_nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" oifname "{{ edge_gateway_effective_provider_interface }}" ip daddr {{ provider_cidr }} snat to {{ edge_node_snat_ips[edge_gateway_node_name] }}
+    }
+}
+{% endif %}

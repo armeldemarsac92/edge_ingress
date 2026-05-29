@@ -1,0 +1,86 @@
+---
+- name: Set WireGuard interfaces requiring local keys
+  ansible.builtin.set_fact:
+    edge_wireguard_key_interfaces: >-
+      {{
+        wireguard_links | dict2items | map(attribute='value.vps_if') | list
+        if 'edge_vps' in group_names
+        else [wireguard_links[edge_wireguard_node_name].node_if]
+      }}
+
+- name: Check existing WireGuard private keys
+  ansible.builtin.stat:
+    path: "{{ edge_wireguard_key_dir }}/{{ item }}.private"
+  loop: "{{ edge_wireguard_key_interfaces }}"
+  loop_control:
+    label: "{{ item }}"
+  register: edge_wireguard_key_stats
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Generate missing WireGuard private keys
+  ansible.builtin.command: wg genkey
+  changed_when: true
+  loop: "{{ edge_wireguard_key_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: edge_wireguard_generated_key_commands
+  when: not item.stat.exists
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Persist generated WireGuard private keys
+  ansible.builtin.copy:
+    content: "{{ item.stdout }}\n"
+    dest: "{{ edge_wireguard_key_dir }}/{{ item.item.item }}.private"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ edge_wireguard_generated_key_commands.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.item | default('skipped') }}"
+  when:
+    - item is not skipped
+    - item.stdout is defined
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Read WireGuard private keys
+  ansible.builtin.slurp:
+    src: "{{ edge_wireguard_key_dir }}/{{ item }}.private"
+  loop: "{{ edge_wireguard_key_interfaces }}"
+  loop_control:
+    label: "{{ item }}"
+  register: edge_wireguard_private_key_slurps
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Store local WireGuard private keys for template rendering
+  ansible.builtin.set_fact:
+    edge_wireguard_generated_private_keys: >-
+      {{
+        edge_wireguard_generated_private_keys | default({}) |
+        combine({ item.item: (item.content | b64decode | trim) })
+      }}
+  loop: "{{ edge_wireguard_private_key_slurps.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Derive WireGuard public keys
+  ansible.builtin.command: wg pubkey
+  args:
+    stdin: "{{ item.content | b64decode }}"
+  changed_when: false
+  loop: "{{ edge_wireguard_private_key_slurps.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  register: edge_wireguard_public_key_commands
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Store local WireGuard public keys
+  ansible.builtin.set_fact:
+    edge_wireguard_generated_public_keys: >-
+      {{
+        edge_wireguard_generated_public_keys | default({}) |
+        combine({ item.item.item: item.stdout })
+      }}
+  loop: "{{ edge_wireguard_public_key_commands.results }}"
+  loop_control:
+    label: "{{ item.item.item }}"

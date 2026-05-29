@@ -1,0 +1,17 @@
+[Unit]
+Description=VPS edge OpenStack gateway nftables rules
+After=network-online.target wg-quick@{{ wireguard_links[edge_gateway_node_name].node_if }}.service
+Wants=network-online.target
+Requires=wg-quick@{{ wireguard_links[edge_gateway_node_name].node_if }}.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-{{ edge_gateway_nft_bin }} delete table inet vps_edge_gateway
+ExecStartPre=-{{ edge_gateway_nft_bin }} delete table ip vps_edge_gateway_nat
+ExecStart={{ edge_gateway_nft_bin }} -f {{ edge_gateway_nft_config_path }}
+ExecStop=-{{ edge_gateway_nft_bin }} delete table inet vps_edge_gateway
+ExecStop=-{{ edge_gateway_nft_bin }} delete table ip vps_edge_gateway_nat
+
+[Install]
+WantedBy=multi-user.target

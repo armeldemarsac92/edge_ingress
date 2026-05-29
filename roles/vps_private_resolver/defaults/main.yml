@@ -1,0 +1,13 @@
+---
+vps_private_resolver_service_name: unbound-vps-edge-private
+vps_private_resolver_config_path: /etc/unbound/vps-edge-private.conf
+vps_private_resolver_bind_address: 127.0.0.1
+vps_private_resolver_bind_port: 53
+vps_private_resolver_user: unbound
+vps_private_resolver_binary: /usr/sbin/unbound
+
+vps_private_resolver_packages:
+  Debian:
+    - unbound
+  RedHat:
+    - unbound

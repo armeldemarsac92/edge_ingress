@@ -1,0 +1,180 @@
+# Ansible managed: VPS edge HAProxy.
+{% set edge_public_domain_roots = edge_public_domains | join(' ') %}
+{% set edge_public_domain_suffixes = edge_public_domains | map('regex_replace', '^', '.') | join(' ') %}
+{% set edge_local_routes = (edge_local_http_apps | default([])) + (edge_proxy_haproxy_local_tls_routes | default([])) %}
+{% set ns = namespace(has_http_local=false, has_tls_local=(edge_local_routes | length > 0)) %}
+global
+    log /dev/log local0
+    log /dev/log local1 notice
+    chroot /var/lib/haproxy
+    stats socket {{ edge_proxy_haproxy_stats_socket }} mode 660 level admin expose-fd listeners
+    stats timeout 30s
+{% if edge_proxy_haproxy_crowdsec_enabled | bool %}
+    lua-prepend-path {{ edge_proxy_haproxy_crowdsec_lua_path }}/?.lua
+    lua-load {{ edge_proxy_haproxy_crowdsec_lua_file }}
+    setenv CROWDSEC_BAN_TEMPLATE_PATH {{ edge_proxy_haproxy_crowdsec_ban_template_path }}
+    setenv CROWDSEC_CAPTCHA_TEMPLATE_PATH {{ edge_proxy_haproxy_crowdsec_captcha_template_path }}
+{% endif %}
+    user haproxy
+    group haproxy
+    daemon
+
+defaults
+    log global
+    option dontlognull
+    timeout connect 5s
+    timeout client 1h
+    timeout server 1h
+
+resolvers edge_dns
+    nameserver local {{ edge_proxy_resolver }}:53
+    accepted_payload_size 8192
+    resolve_retries 3
+    timeout retry 1s
+    hold valid {{ edge_proxy_resolver_valid }}
+
+frontend edge_http
+    bind *:80
+    mode http
+    option httplog
+    option forwardfor
+{% if edge_proxy_haproxy_crowdsec_enabled | bool %}
+    unique-id-format %[uuid()]
+    unique-id-header X-Unique-ID
+    filter spoe engine crowdsec config {{ edge_proxy_haproxy_crowdsec_spoe_config }}
+    http-request send-spoe-group crowdsec crowdsec-http-no-body
+    http-request lua.crowdsec_handle if { var(txn.crowdsec.remediation) -m str "ban" }
+{% endif %}
+    http-request set-var(txn.edge_host) hdr(host),lower,field(1,:)
+    acl edge_host_allowed var(txn.edge_host) -m end {{ edge_public_domain_suffixes }}
+    acl edge_host_root var(txn.edge_host) -m str {{ edge_public_domain_roots }}
+{% for route in edge_local_routes %}
+{% set route_name = route.name | regex_replace('[^A-Za-z0-9_]', '_') %}
+{% if route.redirect_http | default(true) | bool %}
+{% if route.hostnames | default([]) | length > 0 %}
+{% set ns.has_http_local = true %}
+    acl edge_local_http_route var(txn.edge_host) -m str {{ route.hostnames | join(' ') }}
+    acl edge_local_http_{{ route_name }}_host var(txn.edge_host) -m str {{ route.hostnames | join(' ') }}
+{% endif %}
+{% if route.hostname_suffixes | default([]) | length > 0 %}
+{% set ns.has_http_local = true %}
+    acl edge_local_http_route var(txn.edge_host) -m end {{ route.hostname_suffixes | join(' ') }}
+    acl edge_local_http_{{ route_name }}_host var(txn.edge_host) -m end {{ route.hostname_suffixes | join(' ') }}
+{% endif %}
+{% endif %}
+{% endfor %}
+    http-request deny deny_status 421 unless edge_host_allowed or edge_host_root
+{% for route in edge_local_routes %}
+{% if route.redirect_http | default(true) | bool %}
+    http-request redirect scheme https code 301 if edge_local_http_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}_host
+{% endif %}
+{% endfor %}
+{% if ns.has_http_local %}
+    http-request do-resolve(txn.edge_dst,edge_dns,ipv4) var(txn.edge_host) unless edge_local_http_route
+    http-request deny deny_status 503 unless { var(txn.edge_dst) -m found } or edge_local_http_route
+{% else %}
+    http-request do-resolve(txn.edge_dst,edge_dns,ipv4) var(txn.edge_host)
+    http-request deny deny_status 503 unless { var(txn.edge_dst) -m found }
+{% endif %}
+    http-request set-header X-Forwarded-Proto http
+{% if ns.has_http_local %}
+    http-request set-dst var(txn.edge_dst) unless edge_local_http_route
+{% else %}
+    http-request set-dst var(txn.edge_dst)
+{% endif %}
+    default_backend edge_http_dynamic
+
+backend edge_http_dynamic
+    mode http
+    server dynamic 0.0.0.0:80
+
+frontend edge_https
+    bind *:443
+    mode tcp
+    tcp-request inspect-delay 5s
+    tcp-request content set-var(sess.edge_sni) req.ssl_sni,lower if { req.ssl_hello_type 1 }
+    acl edge_sni_allowed var(sess.edge_sni) -m end {{ edge_public_domain_suffixes }}
+    acl edge_sni_root var(sess.edge_sni) -m str {{ edge_public_domain_roots }}
+{% for route in edge_local_routes %}
+{% set route_name = route.name | regex_replace('[^A-Za-z0-9_]', '_') %}
+{% if route.hostnames | default([]) | length > 0 %}
+    acl edge_local_tls_route var(sess.edge_sni) -m str {{ route.hostnames | join(' ') }}
+    acl edge_local_tls_{{ route_name }}_sni var(sess.edge_sni) -m str {{ route.hostnames | join(' ') }}
+{% endif %}
+{% if route.hostname_suffixes | default([]) | length > 0 %}
+    acl edge_local_tls_route var(sess.edge_sni) -m end {{ route.hostname_suffixes | join(' ') }}
+    acl edge_local_tls_{{ route_name }}_sni var(sess.edge_sni) -m end {{ route.hostname_suffixes | join(' ') }}
+{% endif %}
+{% endfor %}
+{% if ns.has_tls_local %}
+    tcp-request content reject unless edge_sni_allowed or edge_sni_root or edge_local_tls_route
+{% else %}
+    tcp-request content reject unless edge_sni_allowed or edge_sni_root
+{% endif %}
+{% if ns.has_tls_local %}
+    tcp-request content do-resolve(sess.edge_dst,edge_dns,ipv4) var(sess.edge_sni) unless edge_local_tls_route
+    tcp-request content reject unless { var(sess.edge_dst) -m found } or edge_local_tls_route
+    tcp-request content set-dst var(sess.edge_dst) unless edge_local_tls_route
+{% else %}
+    tcp-request content do-resolve(sess.edge_dst,edge_dns,ipv4) var(sess.edge_sni)
+    tcp-request content reject unless { var(sess.edge_dst) -m found }
+    tcp-request content set-dst var(sess.edge_dst)
+{% endif %}
+    tcp-request content accept if { req.ssl_hello_type 1 }
+{% for route in edge_local_routes %}
+    use_backend edge_tls_terminate_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }} if edge_local_tls_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}_sni
+{% endfor %}
+    default_backend edge_https_dynamic
+
+backend edge_https_dynamic
+    mode tcp
+    server dynamic 0.0.0.0:443
+{% for route in edge_local_routes %}
+
+backend edge_tls_terminate_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
+    mode tcp
+    server local {{ edge_proxy_haproxy_local_tls_bind_host }}:{{ (edge_proxy_haproxy_local_tls_bind_port_base | int) + loop.index0 }} send-proxy-v2
+
+frontend edge_local_https_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
+    bind {{ edge_proxy_haproxy_local_tls_bind_host }}:{{ (edge_proxy_haproxy_local_tls_bind_port_base | int) + loop.index0 }} ssl crt {{ route.tls_cert }} accept-proxy alpn h2,http/1.1
+    mode http
+    option httplog
+    option forwardfor
+{% if edge_proxy_haproxy_crowdsec_enabled | bool %}
+    unique-id-format %[uuid()]
+    unique-id-header X-Unique-ID
+    filter spoe engine crowdsec config {{ edge_proxy_haproxy_crowdsec_spoe_config }}
+    http-request send-spoe-group crowdsec crowdsec-http-no-body
+    http-request lua.crowdsec_handle if { var(txn.crowdsec.remediation) -m str "ban" }
+{% endif %}
+    http-request set-header X-Forwarded-Proto https
+    http-request set-header X-Forwarded-Host %[req.hdr(host)]
+    http-request set-header X-Forwarded-Port 443
+{% if route.hsts | default(false) | bool %}
+    http-response set-header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+{% endif %}
+    default_backend edge_local_http_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
+
+backend edge_local_http_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
+    mode http
+    server origin {{ route.backend_host }}:{{ route.backend_port }} check
+{% endfor %}
+{% for forward in edge_tcp_forwards | default([]) %}
+
+frontend edge_tcp_{{ forward.name | regex_replace('[^A-Za-z0-9_]', '_') }}
+    bind *:{{ forward.public_port }}
+    mode tcp
+    default_backend edge_tcp_{{ forward.name | regex_replace('[^A-Za-z0-9_]', '_') }}
+
+backend edge_tcp_{{ forward.name | regex_replace('[^A-Za-z0-9_]', '_') }}
+    mode tcp
+    server origin {{ forward.hostname }}:{{ forward.origin_port }} resolvers edge_dns resolve-prefer ipv4 init-addr none
+{% endfor %}
+{% if edge_proxy_haproxy_crowdsec_enabled | bool %}
+
+backend {{ edge_proxy_haproxy_crowdsec_backend_name }}
+    mode tcp
+    timeout connect 2s
+    timeout server 60s
+    server spoa {{ edge_proxy_haproxy_crowdsec_backend_host }}:{{ edge_proxy_haproxy_crowdsec_backend_port }}
+{% endif %}

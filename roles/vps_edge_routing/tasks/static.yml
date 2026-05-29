@@ -1,0 +1,26 @@
+---
+- name: Validate static routing inputs
+  ansible.builtin.assert:
+    that:
+      - provider_cidr is defined
+      - wireguard_links | length > 0
+    quiet: true
+
+- name: Render static route service
+  ansible.builtin.template:
+    src: vps-edge-routes.service.j2
+    dest: "/etc/systemd/system/{{ edge_routing_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart VPS edge routes
+
+- name: Enable and start static route service
+  ansible.builtin.systemd:
+    name: "{{ edge_routing_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

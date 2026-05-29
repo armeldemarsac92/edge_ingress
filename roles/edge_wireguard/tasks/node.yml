@@ -1,0 +1,32 @@
+---
+- name: Set OpenStack WireGuard link facts
+  ansible.builtin.set_fact:
+    edge_wireguard_node_link: "{{ wireguard_links[edge_wireguard_node_name] }}"
+    edge_wireguard_managed_interfaces:
+      - "{{ wireguard_links[edge_wireguard_node_name].node_if }}"
+
+- name: Render OpenStack node WireGuard config
+  ansible.builtin.template:
+    src: wg-quick.conf.j2
+    dest: "{{ edge_wireguard_config_dir }}/{{ edge_wireguard_node_link.node_if }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    wg_interface_name: "{{ edge_wireguard_node_link.node_if }}"
+    wg_address: "{{ edge_wireguard_node_link.node_addr }}"
+    wg_listen_port: "{{ edge_wireguard_node_link.node_listen_port | default('') }}"
+    wg_private_key: "{{ edge_wireguard_generated_private_keys[edge_wireguard_node_link.node_if] }}"
+    wg_peer_public_key: "{{ hostvars[edge_wireguard_vps_inventory_name].edge_wireguard_generated_public_keys[edge_wireguard_node_link.vps_if] }}"
+    wg_peer_allowed_ips: "{{ edge_wireguard_node_link.vps_addr.split('/')[0] }}/32, {{ hostvars[edge_wireguard_vps_inventory_name].edge_vps_loopback_addr | default(edge_vps_loopback_addr) }}"
+    wg_peer_endpoint: "{{ hostvars[edge_wireguard_vps_inventory_name].edge_vps_public_endpoint }}:{{ edge_wireguard_node_link.vps_listen_port }}"
+    wg_persistent_keepalive: "{{ edge_wireguard_node_persistent_keepalive }}"
+  notify: Restart WireGuard interfaces
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Enable and start OpenStack node WireGuard interface
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ edge_wireguard_node_link.node_if }}"
+    enabled: true
+    state: started
+  when: not ansible_check_mode

@@ -1,0 +1,25 @@
+---
+edge_firewall_enabled: false
+edge_firewall_backend: nft
+edge_firewall_service_name: vps-edge-firewall
+edge_firewall_config_path: /etc/nftables.d/vps-edge-firewall.nft
+edge_firewall_nft_bin: /usr/sbin/nft
+edge_firewall_ssh_port: 22
+edge_firewall_allow_icmp: true
+edge_firewall_public_tcp_ports_extra: []
+edge_firewall_wireguard_sources: []
+edge_firewall_denied_sources: []
+edge_firewall_ufw_logging: "on"
+edge_firewall_ufw_route_policy: deny
+
+edge_firewall_ufw_packages:
+  Debian:
+    - ufw
+  RedHat:
+    - ufw
+
+edge_firewall_packages:
+  Debian:
+    - nftables
+  RedHat:
+    - nftables

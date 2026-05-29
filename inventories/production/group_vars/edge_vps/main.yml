@@ -1,0 +1,69 @@
+---
+edge_vps_ssh_user: "{{ lookup('env', 'EDGE_VPS_SSH_USER') | default('ansible', true) }}"
+edge_vps_ssh_public_key_file: "{{ lookup('env', 'EDGE_VPS_SSH_PUBLIC_KEY_FILE') | default(inventory_dir ~ '/files/ssh/edge-vps.pub', true) }}"
+
+ansible_user: "{{ edge_vps_ssh_user }}"
+ansible_ssh_private_key_file: "{{ edge_vps_ssh_public_key_file }}"
+ansible_ssh_common_args: "-o IdentitiesOnly=yes"
+
+edge_vps_public_endpoint: "{{ lookup('env', 'EDGE_VPS_PUBLIC_ENDPOINT') | default(ansible_host, true) }}"
+edge_vps_public_interface: null
+
+edge_static_route_metric_base: 100
+
+edge_proxy_enabled: true
+edge_proxy_backend: haproxy
+edge_proxy_manage_nginx_stream_include: true
+edge_local_http_apps: "{{ [authentik_haproxy_app] if authentik_haproxy_enabled | bool else [] }}"
+edge_proxy_haproxy_crowdsec_enabled: true
+edge_control_plane_domain: "{{ lookup('env', 'EDGE_CONTROL_PLANE_DOMAIN') | default('control.' ~ edge_public_root_domain, true) }}"
+edge_control_plane_backend_host: "{{ lookup('env', 'EDGE_CONTROL_PLANE_BACKEND_HOST') | default('10.200.0.50', true) }}"
+edge_control_plane_tls_cert_path: "{{ lookup('env', 'EDGE_CONTROL_PLANE_TLS_CERT_PATH') | default('/etc/haproxy/certs/' ~ edge_control_plane_domain ~ '.pem', true) }}"
+edge_proxy_haproxy_local_tls_routes:
+  - name: control_plane
+    hostname_suffixes:
+      - ".{{ edge_control_plane_domain }}"
+    backend_host: "{{ edge_control_plane_backend_host }}"
+    backend_port: 443
+    tls_cert: "{{ edge_control_plane_tls_cert_path }}"
+    hsts: true
+    redirect_http: false
+edge_proxy_haproxy_cert_bundles: "{{ [authentik_haproxy_cert_bundle] if (authentik_haproxy_pem_src | length > 0 or (authentik_haproxy_cert_src | length > 0 and authentik_haproxy_key_src | length > 0)) else [] }}"
+
+edge_security_enabled: true
+edge_security_crowdsec_enabled: true
+edge_security_fail2ban_enabled: true
+
+edge_firewall_enabled: true
+edge_firewall_backend: ufw
+edge_admin_ssh_sources: []
+edge_firewall_denied_sources: []
+
+authentik_enabled: true
+authentik_domain: "{{ lookup('env', 'AUTHENTIK_DOMAIN') | default('auth.' ~ edge_public_root_domain, true) }}"
+authentik_base_dir: "{{ lookup('env', 'AUTHENTIK_BASE_DIR') | default('/opt/edge/authentik', true) }}"
+authentik_http_bind: 127.0.0.1:9000
+
+# Enable after the configured HAProxy PEM path contains a certificate chain and
+# private key for authentik_domain.
+authentik_haproxy_enabled: true
+authentik_haproxy_cert_path: "{{ lookup('env', 'AUTHENTIK_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ authentik_domain ~ '.pem', true) }}"
+authentik_haproxy_pem_src: ""
+authentik_haproxy_cert_src: ""
+authentik_haproxy_chain_src: ""
+authentik_haproxy_key_src: ""
+authentik_haproxy_app:
+  name: authentik
+  hostnames:
+    - "{{ authentik_domain }}"
+  backend_host: 127.0.0.1
+  backend_port: 9000
+  tls_cert: "{{ authentik_haproxy_cert_path }}"
+  hsts: true
+authentik_haproxy_cert_bundle:
+  name: "{{ authentik_domain }}"
+  pem_src: "{{ authentik_haproxy_pem_src }}"
+  cert_src: "{{ authentik_haproxy_cert_src }}"
+  chain_src: "{{ authentik_haproxy_chain_src }}"
+  key_src: "{{ authentik_haproxy_key_src }}"
+  dest: "{{ authentik_haproxy_cert_path }}"

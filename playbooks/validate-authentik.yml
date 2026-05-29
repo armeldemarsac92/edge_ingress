@@ -1,0 +1,43 @@
+---
+- name: Validate Authentik edge deployment
+  hosts: edge_vps
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Check Authentik Compose service
+      ansible.builtin.command: systemctl is-active authentik-compose.service
+      changed_when: false
+
+    - name: Check Authentik containers
+      ansible.builtin.command: docker compose -f {{ authentik_base_dir }}/compose.yml ps
+      changed_when: false
+
+    - name: Check Authentik live health endpoint
+      ansible.builtin.uri:
+        url: "http://{{ authentik_http_bind }}/-/health/live/"
+        status_code: 200
+      register: authentik_live_health
+      retries: 30
+      delay: 5
+      until: authentik_live_health.status == 200
+
+    - name: Check Authentik ready health endpoint
+      ansible.builtin.uri:
+        url: "http://{{ authentik_http_bind }}/-/health/ready/"
+        status_code: 200
+      register: authentik_ready_health
+      retries: 30
+      delay: 5
+      until: authentik_ready_health.status == 200
+
+    - name: Check Authentik default authentication shortcut
+      ansible.builtin.uri:
+        url: "https://{{ authentik_domain }}/flows/-/default/authentication/?next=/"
+        validate_certs: false
+        status_code: 302
+
+    - name: Check Authentik initial setup flow
+      ansible.builtin.uri:
+        url: "https://{{ authentik_domain }}/if/flow/initial-setup/"
+        validate_certs: false
+        status_code: 200

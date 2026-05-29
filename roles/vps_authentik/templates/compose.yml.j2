@@ -1,0 +1,86 @@
+---
+name: {{ authentik_compose_project_name }}
+
+services:
+  postgresql:
+    image: {{ authentik_postgres_image }}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${PG_PASS}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d authentik -U authentik"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - postgresql:/var/lib/postgresql/data
+    networks:
+      - authentik
+
+  redis:
+    image: {{ authentik_redis_image }}
+    restart: unless-stopped
+    command: --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 3s
+    volumes:
+      - redis:/data
+    networks:
+      - authentik
+
+  server:
+    image: {{ authentik_image }}:{{ authentik_image_tag }}
+    restart: unless-stopped
+    command: server
+    env_file:
+      - .env
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "{{ authentik_http_bind }}:9000"
+    volumes:
+      - ./media:/media
+      - ./custom-templates:/templates
+      - ./blueprints:/blueprints
+    networks:
+      - authentik
+
+  worker:
+    image: {{ authentik_image }}:{{ authentik_image_tag }}
+    restart: unless-stopped
+    command: worker
+    env_file:
+      - .env
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./media:/media
+      - ./custom-templates:/templates
+    networks:
+      - authentik
+
+networks:
+  authentik:
+    name: {{ authentik_docker_network }}
+    ipam:
+      config:
+        - subnet: {{ authentik_docker_subnet }}
+
+volumes:
+  postgresql:
+    name: {{ authentik_compose_project_name }}_postgresql
+  redis:
+    name: {{ authentik_compose_project_name }}_redis

@@ -1,0 +1,38 @@
+---
+authentik_enabled: false
+authentik_domain: auth.example.com
+authentik_base_dir: /opt/edge/authentik
+authentik_compose_project_name: authentik
+
+authentik_image: ghcr.io/goauthentik/server
+authentik_image_tag: "2026.2"
+authentik_postgres_image: postgres:16-alpine
+authentik_redis_image: redis:7-alpine
+
+authentik_http_bind: 127.0.0.1:9000
+authentik_docker_network: authentik
+authentik_docker_subnet: 172.30.10.0/24
+authentik_trusted_proxy_cidrs:
+  - 127.0.0.1/32
+  - "{{ authentik_docker_subnet }}"
+
+authentik_error_reporting_enabled: false
+authentik_log_level: info
+
+authentik_docker_packages:
+  Debian:
+    - docker.io
+    - docker-compose-v2
+    - openssl
+  RedHat:
+    - docker
+    - docker-compose-plugin
+    - openssl
+
+authentik_backup_enabled: true
+authentik_backup_retention_days: 14
+authentik_backup_timer_on_calendar: daily
+
+# Keep existing Authentik database-driven configuration authoritative after the
+# first deployment. Enable this only for fresh installs or explicit recovery.
+authentik_apply_default_blueprints: false

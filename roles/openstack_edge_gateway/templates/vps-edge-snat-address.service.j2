@@ -1,0 +1,13 @@
+[Unit]
+Description=VPS edge provider SNAT address
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={{ edge_gateway_ip_bin }} address replace {{ edge_node_snat_ips[edge_gateway_node_name] }}/32 dev {{ edge_gateway_effective_provider_interface }}
+ExecStop=-{{ edge_gateway_ip_bin }} address delete {{ edge_node_snat_ips[edge_gateway_node_name] }}/32 dev {{ edge_gateway_effective_provider_interface }}
+
+[Install]
+WantedBy=multi-user.target

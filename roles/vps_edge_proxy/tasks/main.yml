@@ -1,0 +1,153 @@
+---
+- name: Skip VPS edge proxy when disabled
+  ansible.builtin.debug:
+    msg: "edge_proxy_enabled is false; skipping VPS edge proxy role."
+  when: not edge_proxy_enabled | bool
+
+- name: Configure VPS edge proxy
+  when: edge_proxy_enabled | bool
+  block:
+    - name: Validate proxy backend
+      ansible.builtin.assert:
+        that:
+          - edge_proxy_backend in ["haproxy", "nginx"]
+          - edge_public_domains is sequence
+          - edge_public_domains | length > 0
+        fail_msg: "edge_proxy_backend must be haproxy or nginx."
+        quiet: true
+
+    - name: Validate generic TCP forwards
+      ansible.builtin.assert:
+        that:
+          - item.protocol | default('tcp') == 'tcp'
+          - item.hostname is match('^[A-Za-z0-9_.-]+$')
+          - item.public_port | int >= edge_tcp_port_pool_start | int
+          - item.public_port | int <= edge_tcp_port_pool_end | int
+          - item.origin_port | int > 0
+          - item.origin_port | int <= 65535
+        fail_msg: "Invalid edge_tcp_forwards entry: {{ item.name | default(item.hostname | default('unnamed')) }}"
+        quiet: true
+      loop: "{{ edge_tcp_forwards | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default(item.hostname | default('tcp-forward')) }}"
+
+    - name: Validate local HTTP apps
+      ansible.builtin.assert:
+        that:
+          - item.name is match('^[A-Za-z0-9_-]+$')
+          - item.hostnames is sequence
+          - item.hostnames | length > 0
+          - item.backend_host is match('^[A-Za-z0-9_.:-]+$')
+          - item.backend_port | int > 0
+          - item.backend_port | int <= 65535
+          - item.tls_cert is match('^/')
+        fail_msg: "Invalid edge_local_http_apps entry: {{ item.name | default('unnamed') }}"
+        quiet: true
+      loop: "{{ edge_local_http_apps | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default('local-http-app') }}"
+
+    - name: Validate local TLS routes
+      ansible.builtin.assert:
+        that:
+          - item.name is match('^[A-Za-z0-9_-]+$')
+          - item.hostnames | default([]) is sequence
+          - item.hostname_suffixes | default([]) is sequence
+          - (item.hostnames | default([]) | length > 0) or (item.hostname_suffixes | default([]) | length > 0)
+          - item.backend_host is match('^[A-Za-z0-9_.:-]+$')
+          - item.backend_port | int > 0
+          - item.backend_port | int <= 65535
+          - item.tls_cert is match('^/')
+        fail_msg: "Invalid edge_proxy_haproxy_local_tls_routes entry: {{ item.name | default('unnamed') }}"
+        quiet: true
+      loop: "{{ edge_proxy_haproxy_local_tls_routes | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default('local-tls-route') }}"
+
+    - name: Validate HAProxy TLS certificate bundles
+      ansible.builtin.assert:
+        that:
+          - item.name is match('^[A-Za-z0-9_.-]+$')
+          - item.pem_src | default('') == '' or item.pem_src is match('^/')
+          - item.cert_src | default('') == '' or item.cert_src is match('^/')
+          - item.key_src | default('') == '' or item.key_src is match('^/')
+          - item.chain_src | default('') == '' or item.chain_src is match('^/')
+          - item.dest is match('^/')
+          - (item.pem_src | default('') | length > 0) or ((item.cert_src | default('') | length > 0) and (item.key_src | default('') | length > 0))
+        fail_msg: "Invalid edge_proxy_haproxy_cert_bundles entry: {{ item.name | default('unnamed') }}"
+        quiet: true
+      loop: "{{ edge_proxy_haproxy_cert_bundles | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default(item.dest | default('cert-bundle')) }}"
+
+    - name: Ensure HAProxy certificate directory exists
+      ansible.builtin.file:
+        path: "{{ edge_proxy_haproxy_cert_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      when: >
+        (edge_proxy_haproxy_cert_bundles | default([]) | length > 0)
+        or (edge_local_http_apps | default([]) | length > 0)
+        or (edge_proxy_haproxy_local_tls_routes | default([]) | length > 0)
+
+    - name: Copy combined HAProxy TLS PEM bundles
+      ansible.builtin.copy:
+        src: "{{ item.pem_src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ edge_proxy_haproxy_cert_bundles | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default(item.dest) }}"
+      notify: Reload HAProxy
+      no_log: true
+      when: item.pem_src | default('') | length > 0
+
+    - name: Render HAProxy TLS certificate bundles from separate files
+      ansible.builtin.template:
+        src: haproxy-cert.pem.j2
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ edge_proxy_haproxy_cert_bundles | default([]) }}"
+      loop_control:
+        label: "{{ item.name | default(item.dest) }}"
+      notify: Reload HAProxy
+      no_log: true
+      when: item.pem_src | default('') | length == 0
+
+    - name: Check local HTTP app TLS certificate files
+      ansible.builtin.stat:
+        path: "{{ item.tls_cert }}"
+      register: edge_local_http_app_cert_stats
+      loop: "{{ (edge_local_http_apps | default([])) + (edge_proxy_haproxy_local_tls_routes | default([])) }}"
+      loop_control:
+        label: "{{ item.tls_cert }}"
+
+    - name: Stop when local HTTP app TLS certificates are missing
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Missing HAProxy TLS certificate bundle for {{ item.item.name }}: {{ item.item.tls_cert }}"
+        quiet: true
+      loop: "{{ edge_local_http_app_cert_stats.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.name | default(item.item.tls_cert) }}"
+
+    - name: Stop if Minecraft routing was requested without a Minecraft-aware proxy
+      ansible.builtin.fail:
+        msg: "edge_minecraft_enabled is true, but this role does not configure a Minecraft-aware proxy. Add that role before enabling 25565/tcp routing."
+      when: edge_minecraft_enabled | bool
+
+    - name: Configure HAProxy edge proxy
+      ansible.builtin.import_tasks: haproxy.yml
+      when: edge_proxy_backend == "haproxy"
+
+    - name: Configure NGINX edge proxy
+      ansible.builtin.import_tasks: nginx.yml
+      when: edge_proxy_backend == "nginx"

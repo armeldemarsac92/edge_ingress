@@ -1,0 +1,12 @@
+---
+- name: Phase 3 - configure public VPS proxy and firewall
+  hosts: edge_vps
+  gather_facts: true
+  become: true
+  roles:
+    - role: vps_edge_security
+      tags: [security, crowdsec, fail2ban]
+    - role: vps_edge_proxy
+      tags: [proxy]
+    - role: vps_edge_firewall
+      tags: [firewall]

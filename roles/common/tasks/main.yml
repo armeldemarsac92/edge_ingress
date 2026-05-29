@@ -1,0 +1,6 @@
+---
+- name: Assert supported Linux target
+  ansible.builtin.assert:
+    that:
+      - ansible_system == "Linux"
+    fail_msg: "This Ansible setup currently targets Linux hosts only."

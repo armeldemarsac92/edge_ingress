@@ -1,0 +1,26 @@
+---
+- name: Restart CrowdSec
+  ansible.builtin.systemd:
+    name: crowdsec
+    state: restarted
+  when:
+    - edge_security_crowdsec_enabled | bool
+    - not ansible_check_mode
+
+- name: Restart Fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    state: restarted
+  when:
+    - edge_security_fail2ban_enabled | bool
+    - not ansible_check_mode
+
+- name: Reload HAProxy for security config
+  ansible.builtin.systemd:
+    name: "{{ edge_proxy_haproxy_service_name | default('haproxy') }}"
+    state: reloaded
+  failed_when: false
+  when:
+    - edge_proxy_enabled | default(false) | bool
+    - edge_proxy_backend | default('haproxy') == 'haproxy'
+    - not ansible_check_mode

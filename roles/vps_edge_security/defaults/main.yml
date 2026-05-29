@@ -1,0 +1,67 @@
+---
+edge_security_enabled: false
+
+edge_security_crowdsec_enabled: false
+edge_security_fail2ban_enabled: false
+
+edge_security_crowdsec_packages:
+  Debian:
+    - crowdsec
+    - crowdsec-firewall-bouncer-nftables
+    - crowdsec-haproxy-spoa-bouncer
+  RedHat:
+    - crowdsec
+
+edge_security_fail2ban_packages:
+  Debian:
+    - fail2ban
+  RedHat:
+    - fail2ban
+
+edge_security_crowdsec_services:
+  - crowdsec
+  - crowdsec-firewall-bouncer
+  - crowdsec-spoa-bouncer
+
+edge_security_crowdsec_collections:
+  - crowdsecurity/linux
+  - crowdsecurity/sshd
+  - crowdsecurity/haproxy
+  - crowdsecurity/base-http-scenarios
+  - crowdsecurity/http-cve
+  - crowdsecurity/whitelist-good-actors
+
+edge_security_crowdsec_acquisition_dir: /etc/crowdsec/acquis.d
+edge_security_crowdsec_acquisitions:
+  - name: setup.sshd.yaml
+    source: file
+    filenames:
+      - /var/log/auth.log
+      - /var/log/secure
+    labels:
+      type: syslog
+  - name: setup.haproxy.yaml
+    source: file
+    filenames:
+      - /var/log/haproxy.log
+    labels:
+      type: haproxy
+  - name: setup.linux.yaml
+    source: file
+    filenames:
+      - /var/log/messages
+      - /var/log/syslog
+      - /var/log/kern.log
+    labels:
+      type: syslog
+
+edge_security_crowdsec_bouncer_configs:
+  - /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+  - /etc/crowdsec/bouncers/crowdsec-spoa-bouncer.yaml
+
+edge_security_fail2ban_jail_config: /etc/fail2ban/jail.d/defaults-debian.conf
+edge_security_fail2ban_banaction: nftables
+edge_security_fail2ban_backend: systemd
+
+edge_security_haproxy_spoe_config: /etc/haproxy/crowdsec.cfg
+edge_security_haproxy_spoe_backend: crowdsec-spoa

@@ -1,0 +1,35 @@
+---
+- name: Refresh apt cache before HAProxy package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install HAProxy packages
+  ansible.builtin.package:
+    name: "{{ edge_proxy_haproxy_packages[ansible_os_family] | default(edge_proxy_haproxy_packages.Debian) }}"
+    state: present
+
+- name: Stop NGINX when HAProxy is selected
+  ansible.builtin.systemd:
+    name: "{{ edge_proxy_nginx_service_name }}"
+    enabled: false
+    state: stopped
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Render HAProxy edge config
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: "{{ edge_proxy_haproxy_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload HAProxy
+
+- name: Enable and start HAProxy
+  ansible.builtin.systemd:
+    name: "{{ edge_proxy_haproxy_service_name }}"
+    enabled: true
+    state: started
+  when: not ansible_check_mode

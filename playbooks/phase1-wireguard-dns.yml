@@ -1,0 +1,26 @@
+---
+- name: Phase 1 - configure WireGuard links
+  hosts:
+    - edge_vps
+    - openstack_edge_nodes
+  gather_facts: true
+  become: true
+  roles:
+    - role: edge_wireguard
+      tags: [wireguard]
+
+- name: Phase 1 - expose OpenStack private DNS over WireGuard
+  hosts: openstack_edge_nodes
+  gather_facts: true
+  become: true
+  roles:
+    - role: openstack_edge_dns
+      tags: [dns, openstack-dns]
+
+- name: Phase 1 - configure VPS private resolver
+  hosts: edge_vps
+  gather_facts: true
+  become: true
+  roles:
+    - role: vps_private_resolver
+      tags: [dns, vps-dns]

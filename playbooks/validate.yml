@@ -1,0 +1,163 @@
+---
+- name: Validate VPS edge services
+  hosts: edge_vps
+  gather_facts: false
+  become: true
+  vars:
+    edge_validation_zone: "{{ edge_private_dns_zones[0] }}"
+    edge_validation_app_hostname: ""
+    edge_validation_provider_ip: "{{ provider_gateway_ip }}"
+    edge_validation_vps_dns_server_effective: "{{ edge_validation_vps_dns_server | default(vps_private_resolver_bind_address | default(edge_proxy_resolver | default('localhost'))) }}"
+    edge_validation_app_address_regex_effective: "{{ edge_validation_app_address_regex | default('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$') }}"
+  tasks:
+    - name: Check WireGuard state
+      ansible.builtin.command: wg show
+      changed_when: false
+
+    - name: Check private DNS zone from VPS
+      ansible.builtin.command: "dig @{{ edge_validation_vps_dns_server_effective }} {{ edge_validation_zone }} SOA +short"
+      changed_when: false
+      register: edge_validation_vps_dns
+      failed_when: edge_validation_vps_dns.stdout | length == 0
+
+    - name: Check each node DNS listener from VPS
+      ansible.builtin.command: "dig @{{ item }} {{ edge_validation_zone }} SOA +short"
+      changed_when: false
+      register: edge_validation_forwarder_dns
+      failed_when: edge_validation_forwarder_dns.stdout | length == 0
+      loop: "{{ edge_dns_forwarders }}"
+
+    - name: Check private app A record from VPS when supplied
+      ansible.builtin.command: "dig @{{ edge_validation_vps_dns_server_effective }} {{ edge_validation_app_hostname }} A +short"
+      changed_when: false
+      register: edge_validation_vps_app_dns
+      failed_when: edge_validation_vps_app_dns.stdout_lines | select('match', edge_validation_app_address_regex_effective) | list | length == 0
+      when: edge_validation_app_hostname | length > 0
+
+    - name: Check route to provider network
+      ansible.builtin.command: "ip route get {{ edge_validation_provider_ip }}"
+      changed_when: false
+
+    - name: Check FRR service state on VPS
+      ansible.builtin.command: systemctl is-active frr
+      changed_when: false
+      register: edge_validation_vps_frr
+      failed_when: edge_validation_vps_frr.stdout != "active"
+      when: edge_routing_mode == "frr"
+
+    - name: Check BGP-learned provider route on VPS
+      ansible.builtin.command: "ip route show {{ provider_cidr }} proto bgp"
+      changed_when: false
+      register: edge_validation_vps_bgp_route
+      failed_when: edge_validation_vps_bgp_route.stdout | length == 0
+      when: edge_routing_mode == "frr"
+
+    - name: Check VPS BGP neighbors
+      ansible.builtin.command: vtysh -c "show bgp summary"
+      changed_when: false
+      register: edge_validation_vps_bgp_summary
+      failed_when: edge_validation_vps_bgp_summary.stdout_lines | select('search', item.value.node_addr.split('/')[0] | regex_escape) | list | length == 0
+      loop: "{{ wireguard_links | dict2items }}"
+      loop_control:
+        label: "{{ item.value.node_addr.split('/')[0] }}"
+      when: edge_routing_mode == "frr"
+
+    - name: Validate NGINX config when selected
+      ansible.builtin.command: nginx -t
+      changed_when: false
+      when:
+        - edge_proxy_enabled | default(false) | bool
+        - edge_proxy_backend == "nginx"
+
+    - name: Validate HAProxy config when selected
+      ansible.builtin.command: "haproxy -c -f {{ edge_proxy_haproxy_config | default('/etc/haproxy/haproxy.cfg') }}"
+      changed_when: false
+      when:
+        - edge_proxy_enabled | default(false) | bool
+        - edge_proxy_backend == "haproxy"
+
+    - name: Check VPS nftables firewall table when enabled
+      ansible.builtin.command: nft list table inet vps_edge_firewall
+      changed_when: false
+      when:
+        - edge_firewall_enabled | default(false) | bool
+        - edge_firewall_backend | default('nft') == 'nft'
+
+    - name: Check VPS UFW firewall when enabled
+      ansible.builtin.command: ufw status verbose
+      changed_when: false
+      register: edge_validation_vps_ufw
+      failed_when: "edge_validation_vps_ufw.stdout is not search('Status: active')"
+      when:
+        - edge_firewall_enabled | default(false) | bool
+        - edge_firewall_backend | default('nft') == 'ufw'
+
+    - name: Check VPS CrowdSec services when enabled
+      ansible.builtin.command: "systemctl is-active {{ item }}"
+      changed_when: false
+      register: edge_validation_vps_security_services
+      failed_when: edge_validation_vps_security_services.stdout != "active"
+      loop:
+        - crowdsec
+        - crowdsec-firewall-bouncer
+        - crowdsec-spoa-bouncer
+      when: edge_security_crowdsec_enabled | default(false) | bool
+
+    - name: Check VPS Fail2ban service when enabled
+      ansible.builtin.command: systemctl is-active fail2ban
+      changed_when: false
+      register: edge_validation_vps_fail2ban
+      failed_when: edge_validation_vps_fail2ban.stdout != "active"
+      when: edge_security_fail2ban_enabled | default(false) | bool
+
+- name: Validate OpenStack edge node services
+  hosts: openstack_edge_nodes
+  gather_facts: false
+  become: true
+  vars:
+    edge_validation_zone: "{{ edge_private_dns_zones[0] }}"
+    edge_validation_app_hostname: ""
+    edge_validation_app_address_regex_effective: "{{ edge_validation_app_address_regex | default('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$') }}"
+  tasks:
+    - name: Set validation link facts
+      ansible.builtin.set_fact:
+        edge_validation_node_name: "{{ edge_node_name | default(inventory_hostname) }}"
+
+    - name: Check WireGuard state
+      ansible.builtin.command: wg show
+      changed_when: false
+
+    - name: Check node DNS service state
+      ansible.builtin.command: systemctl is-active unbound-vps-edge
+      changed_when: false
+      register: edge_validation_node_dns_service
+      failed_when: edge_validation_node_dns_service.stdout != "active"
+
+    - name: Check node private app A record when supplied
+      ansible.builtin.command: "dig @{{ wireguard_links[edge_validation_node_name].node_addr.split('/')[0] }} {{ edge_validation_app_hostname }} A +short"
+      changed_when: false
+      register: edge_validation_node_app_dns
+      failed_when: edge_validation_node_app_dns.stdout_lines | select('match', edge_validation_app_address_regex_effective) | list | length == 0
+      when: edge_validation_app_hostname | length > 0
+
+    - name: Check gateway nftables table
+      ansible.builtin.command: nft list table inet vps_edge_gateway
+      changed_when: false
+
+    - name: Check provider route
+      ansible.builtin.command: "ip route get {{ provider_gateway_ip }}"
+      changed_when: false
+
+    - name: Check FRR service state on OpenStack node
+      ansible.builtin.command: systemctl is-active frr
+      changed_when: false
+      register: edge_validation_node_frr
+      failed_when: edge_validation_node_frr.stdout != "active"
+      when: edge_routing_mode == "frr"
+
+    - name: Check node BGP neighbor
+      ansible.builtin.command: vtysh -c "show bgp summary"
+      changed_when: false
+      register: edge_validation_node_bgp_summary
+      failed_when: edge_validation_node_bgp_summary.stdout is not search(wireguard_links[edge_validation_node_name].vps_addr.split('/')[0] | regex_escape)
+      when: edge_routing_mode == "frr"

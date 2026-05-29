@@ -1,0 +1,24 @@
+---
+- name: Skip VPS edge firewall when disabled
+  ansible.builtin.debug:
+    msg: "edge_firewall_enabled is false; no VPS firewall policy was applied."
+  when: not edge_firewall_enabled | bool
+
+- name: Configure VPS edge firewall
+  when: edge_firewall_enabled | bool
+  block:
+    - name: Validate VPS firewall backend
+      ansible.builtin.assert:
+        that:
+          - edge_firewall_backend in ["nft", "ufw"]
+          - wireguard_links | length > 0
+        fail_msg: "edge_firewall_backend must be nft or ufw."
+        quiet: true
+
+    - name: Configure nftables VPS edge firewall
+      ansible.builtin.import_tasks: nft.yml
+      when: edge_firewall_backend == "nft"
+
+    - name: Configure UFW VPS edge firewall
+      ansible.builtin.import_tasks: ufw.yml
+      when: edge_firewall_backend == "ufw"

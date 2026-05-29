@@ -1,0 +1,27 @@
+# Ansible managed: TLS SNI and explicit TCP edge proxy.
+resolver {{ edge_proxy_resolver }} valid={{ edge_proxy_resolver_valid }} ipv6=off;
+
+map $ssl_preread_server_name $edge_tls_backend {
+    hostnames;
+    default {{ edge_proxy_tls_fallback }};
+{% for domain in edge_public_domains %}
+    .{{ domain }} $ssl_preread_server_name:443;
+{% endfor %}
+}
+
+server {
+    listen 443;
+    ssl_preread on;
+    proxy_connect_timeout 5s;
+    proxy_timeout 1h;
+    proxy_pass $edge_tls_backend;
+}
+{% for forward in edge_tcp_forwards | default([]) %}
+
+server {
+    listen {{ forward.public_port }};
+    proxy_connect_timeout 5s;
+    proxy_timeout 1h;
+    proxy_pass {{ forward.hostname }}:{{ forward.origin_port }};
+}
+{% endfor %}

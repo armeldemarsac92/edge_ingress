@@ -1,0 +1,116 @@
+---
+- name: Set OpenStack gateway node facts
+  ansible.builtin.set_fact:
+    edge_gateway_node_name: "{{ edge_node_name | default(inventory_hostname) }}"
+
+- name: Validate OpenStack gateway variables
+  ansible.builtin.assert:
+    that:
+      - wireguard_links[edge_gateway_node_name] is defined
+      - provider_cidr is defined
+      - provider_gateway_ip is defined
+      - edge_management_cidrs | length > 0
+      - (not edge_gateway_use_snat) or edge_node_snat_ips[edge_gateway_node_name] is defined
+      - (not edge_gateway_use_snat) or edge_node_snat_ips[edge_gateway_node_name] not in [none, ""]
+    quiet: true
+
+- name: Refresh apt cache before nftables package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install nftables package
+  ansible.builtin.package:
+    name: "{{ edge_gateway_packages[ansible_os_family] | default(edge_gateway_packages.Debian) }}"
+    state: present
+
+- name: Enable IPv4 forwarding
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    state: present
+    reload: true
+
+- name: Probe provider egress route
+  ansible.builtin.command: "ip -o route get {{ edge_gateway_provider_probe_ip }}"
+  changed_when: false
+  register: edge_gateway_provider_route
+  when: edge_gateway_provider_interface is not defined or edge_gateway_provider_interface in [none, ""]
+
+- name: Set effective provider interface
+  ansible.builtin.set_fact:
+    edge_gateway_effective_provider_interface: >-
+      {{
+        edge_gateway_provider_interface
+        if edge_gateway_provider_interface is defined and edge_gateway_provider_interface not in [none, ""]
+        else (edge_gateway_provider_route.stdout.split(' dev ')[1].split()[0])
+      }}
+
+- name: Validate provider interface detection
+  ansible.builtin.assert:
+    that:
+      - edge_gateway_effective_provider_interface is defined
+      - edge_gateway_effective_provider_interface | string | length > 0
+      - "' ' not in edge_gateway_effective_provider_interface"
+      - edge_gateway_effective_provider_interface is match('^[A-Za-z0-9_.:-]+$')
+    fail_msg: "Set edge_gateway_provider_interface explicitly; provider route detection did not find a clean interface."
+    quiet: true
+
+- name: Ensure nftables include directory exists
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render optional SNAT address service
+  ansible.builtin.template:
+    src: vps-edge-snat-address.service.j2
+    dest: "/etc/systemd/system/{{ edge_gateway_snat_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart OpenStack SNAT address
+  when: edge_gateway_configure_snat_address | bool
+
+- name: Enable optional SNAT address service
+  ansible.builtin.systemd:
+    name: "{{ edge_gateway_snat_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when:
+    - edge_gateway_configure_snat_address | bool
+    - not ansible_check_mode
+
+- name: Render OpenStack gateway nftables rules
+  ansible.builtin.template:
+    src: vps-edge-gateway.nft.j2
+    dest: "{{ edge_gateway_nft_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart OpenStack gateway nftables
+
+- name: Render OpenStack gateway nftables service
+  ansible.builtin.template:
+    src: vps-edge-gateway-nftables.service.j2
+    dest: "/etc/systemd/system/{{ edge_gateway_nft_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart OpenStack gateway nftables
+
+- name: Enable and start OpenStack gateway nftables service
+  ansible.builtin.systemd:
+    name: "{{ edge_gateway_nft_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

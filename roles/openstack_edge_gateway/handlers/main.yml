@@ -1,0 +1,21 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Restart OpenStack SNAT address
+  ansible.builtin.systemd:
+    name: "{{ edge_gateway_snat_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when:
+    - edge_gateway_configure_snat_address | bool
+    - not ansible_check_mode
+
+- name: Restart OpenStack gateway nftables
+  ansible.builtin.systemd:
+    name: "{{ edge_gateway_nft_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode

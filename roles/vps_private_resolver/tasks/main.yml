@@ -1,0 +1,57 @@
+---
+- name: Validate VPS private resolver variables
+  ansible.builtin.assert:
+    that:
+      - edge_private_dns_zones is sequence
+      - edge_private_dns_zones | length > 0
+      - edge_dns_forwarders | length > 0
+    quiet: true
+
+- name: Refresh apt cache before Unbound package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install Unbound for VPS private resolver
+  ansible.builtin.package:
+    name: "{{ vps_private_resolver_packages[ansible_os_family] | default(vps_private_resolver_packages.Debian) }}"
+    state: present
+
+- name: Stop package default Unbound service on VPS
+  ansible.builtin.systemd:
+    name: unbound
+    enabled: false
+    state: stopped
+  when:
+    - vps_private_resolver_service_name != "unbound"
+    - not ansible_check_mode
+  failed_when: false
+
+- name: Render VPS private resolver config
+  ansible.builtin.template:
+    src: unbound-vps-edge-private.conf.j2
+    dest: "{{ vps_private_resolver_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart VPS private resolver
+
+- name: Render VPS private resolver service
+  ansible.builtin.template:
+    src: unbound-vps-edge-private.service.j2
+    dest: "/etc/systemd/system/{{ vps_private_resolver_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart VPS private resolver
+
+- name: Enable and start VPS private resolver
+  ansible.builtin.systemd:
+    name: "{{ vps_private_resolver_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

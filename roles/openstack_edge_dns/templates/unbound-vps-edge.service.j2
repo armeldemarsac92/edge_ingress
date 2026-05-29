@@ -1,0 +1,15 @@
+[Unit]
+Description=VPS edge WireGuard DNS resolver
+After=network-online.target wg-quick@{{ wireguard_links[openstack_edge_dns_node_name].node_if }}.service
+Wants=network-online.target
+Requires=wg-quick@{{ wireguard_links[openstack_edge_dns_node_name].node_if }}.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/install -d -o {{ openstack_edge_dns_user }} -g {{ openstack_edge_dns_user }} -m 0755 /run/{{ openstack_edge_dns_service_name }}
+ExecStart={{ openstack_edge_dns_binary }} -d -c {{ openstack_edge_dns_config_path }}
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

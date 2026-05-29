@@ -1,0 +1,52 @@
+---
+- name: Set OpenStack DNS link facts
+  ansible.builtin.set_fact:
+    openstack_edge_dns_node_name: "{{ edge_node_name | default(inventory_hostname) }}"
+
+- name: Validate OpenStack DNS variables
+  ansible.builtin.assert:
+    that:
+      - wireguard_links[openstack_edge_dns_node_name] is defined
+      - edge_private_dns_zones is sequence
+      - edge_private_dns_zones | length > 0
+      - designate_dns_forwarders | length > 0
+    quiet: true
+
+- name: Refresh apt cache before Unbound package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install Unbound for WireGuard-facing DNS
+  ansible.builtin.package:
+    name: "{{ openstack_edge_dns_packages[ansible_os_family] | default(openstack_edge_dns_packages.Debian) }}"
+    state: present
+
+- name: Render WireGuard-facing Unbound config
+  ansible.builtin.template:
+    src: unbound-vps-edge.conf.j2
+    dest: "{{ openstack_edge_dns_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart OpenStack edge DNS
+
+- name: Render WireGuard-facing Unbound service
+  ansible.builtin.template:
+    src: unbound-vps-edge.service.j2
+    dest: "/etc/systemd/system/{{ openstack_edge_dns_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart OpenStack edge DNS
+
+- name: Enable and start WireGuard-facing Unbound
+  ansible.builtin.systemd:
+    name: "{{ openstack_edge_dns_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

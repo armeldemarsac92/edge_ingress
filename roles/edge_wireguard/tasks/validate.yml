@@ -1,0 +1,33 @@
+---
+- name: Validate shared WireGuard variables
+  ansible.builtin.assert:
+    that:
+      - wireguard_links is mapping
+    quiet: true
+
+- name: Set edge VPS inventory name
+  ansible.builtin.set_fact:
+    edge_wireguard_vps_inventory_name: "{{ edge_vps_inventory_name | default(groups['edge_vps'][0]) }}"
+
+- name: Validate VPS WireGuard variables
+  ansible.builtin.assert:
+    that:
+      - edge_vps_public_endpoint is defined
+      - edge_vps_public_endpoint | string | length > 0
+      - edge_vps_loopback_addr is defined
+      - edge_vps_loopback_addr is match('^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$')
+    quiet: true
+  when: "'edge_vps' in group_names"
+
+- name: Set OpenStack WireGuard node name
+  ansible.builtin.set_fact:
+    edge_wireguard_node_name: "{{ edge_node_name | default(inventory_hostname) }}"
+  when: "'openstack_edge_nodes' in group_names"
+
+- name: Validate OpenStack WireGuard variables
+  ansible.builtin.assert:
+    that:
+      - wireguard_links[edge_wireguard_node_name] is defined
+      - groups.edge_vps | length == 1
+    quiet: true
+  when: "'openstack_edge_nodes' in group_names"

@@ -1,0 +1,11 @@
+---
+openstack_edge_dns_service_name: unbound-vps-edge
+openstack_edge_dns_config_path: /etc/unbound/vps-edge.conf
+openstack_edge_dns_user: unbound
+openstack_edge_dns_binary: /usr/sbin/unbound
+
+openstack_edge_dns_packages:
+  Debian:
+    - unbound
+  RedHat:
+    - unbound

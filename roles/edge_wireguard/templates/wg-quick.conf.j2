@@ -1,0 +1,20 @@
+# Ansible managed: {{ wg_interface_name }}
+[Interface]
+Address = {{ wg_address }}
+PrivateKey = {{ wg_private_key }}
+MTU = {{ edge_wireguard_mtu }}
+Table = off
+SaveConfig = false
+{% if wg_listen_port | string | length > 0 %}
+ListenPort = {{ wg_listen_port }}
+{% endif %}
+
+[Peer]
+PublicKey = {{ wg_peer_public_key }}
+AllowedIPs = {{ wg_peer_allowed_ips }}
+{% if wg_peer_endpoint | string | length > 0 %}
+Endpoint = {{ wg_peer_endpoint }}
+{% endif %}
+{% if wg_persistent_keepalive | int > 0 %}
+PersistentKeepalive = {{ wg_persistent_keepalive }}
+{% endif %}

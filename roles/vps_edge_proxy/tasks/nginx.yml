@@ -1,0 +1,70 @@
+---
+- name: Refresh apt cache before NGINX package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install NGINX packages
+  ansible.builtin.package:
+    name: "{{ edge_proxy_nginx_packages[ansible_os_family] | default(edge_proxy_nginx_packages.Debian) }}"
+    state: present
+
+- name: Stop HAProxy when NGINX is selected
+  ansible.builtin.systemd:
+    name: "{{ edge_proxy_haproxy_service_name }}"
+    enabled: false
+    state: stopped
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Disable default NGINX site if present
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload NGINX
+
+- name: Ensure NGINX stream include directory exists
+  ansible.builtin.file:
+    path: "{{ edge_proxy_nginx_stream_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Add top-level NGINX stream include
+  ansible.builtin.blockinfile:
+    path: /etc/nginx/nginx.conf
+    marker: "# {mark} ANSIBLE MANAGED VPS EDGE STREAM"
+    insertafter: EOF
+    block: |
+      stream {
+          include {{ edge_proxy_nginx_stream_dir }}/*.conf;
+      }
+  notify: Reload NGINX
+  when: edge_proxy_manage_nginx_stream_include | bool
+
+- name: Render NGINX HTTP edge config
+  ansible.builtin.template:
+    src: vps-edge-http.conf.j2
+    dest: "{{ edge_proxy_nginx_http_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload NGINX
+
+- name: Render NGINX stream edge config
+  ansible.builtin.template:
+    src: vps-edge-stream.conf.j2
+    dest: "{{ edge_proxy_nginx_stream_config }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload NGINX
+
+- name: Enable and start NGINX
+  ansible.builtin.systemd:
+    name: "{{ edge_proxy_nginx_service_name }}"
+    enabled: true
+    state: started
+  when: not ansible_check_mode

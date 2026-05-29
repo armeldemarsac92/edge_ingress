@@ -1,0 +1,76 @@
+---
+- name: Phase 0 - discover VPS edge state
+  hosts: edge_vps
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Show operating system
+      ansible.builtin.debug:
+        msg:
+          os: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+          kernel: "{{ ansible_kernel }}"
+
+    - name: Discover default route
+      ansible.builtin.command: ip -o route show default
+      changed_when: false
+      register: edge_discovery_default_route
+
+    - name: Discover public address candidates
+      ansible.builtin.command: ip -o -4 addr show scope global
+      changed_when: false
+      register: edge_discovery_global_addrs
+
+    - name: Discover firewall and proxy services
+      ansible.builtin.service_facts:
+
+    - name: Report VPS discovery values
+      ansible.builtin.debug:
+        msg:
+          default_route: "{{ edge_discovery_default_route.stdout_lines }}"
+          global_addresses: "{{ edge_discovery_global_addrs.stdout_lines }}"
+          services:
+            nginx: "{{ 'nginx.service' in ansible_facts.services }}"
+            nftables: "{{ 'nftables.service' in ansible_facts.services }}"
+            firewalld: "{{ 'firewalld.service' in ansible_facts.services }}"
+            ufw: "{{ 'ufw.service' in ansible_facts.services }}"
+            docker: "{{ 'docker.service' in ansible_facts.services }}"
+
+- name: Phase 0 - discover OpenStack edge node state
+  hosts: openstack_edge_nodes
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Show operating system
+      ansible.builtin.debug:
+        msg:
+          os: "{{ ansible_distribution }} {{ ansible_distribution_version }}"
+          kernel: "{{ ansible_kernel }}"
+
+    - name: Probe provider network route
+      ansible.builtin.command: "ip -o route get {{ provider_gateway_ip }}"
+      changed_when: false
+      register: edge_discovery_provider_route
+
+    - name: Discover DNS listeners
+      ansible.builtin.shell: >-
+        ss -H -ltnup |
+        awk '$5 ~ /:53$|:5353$/ { print $1 " " $5 " " $NF }' |
+        sort -u |
+        head -n 80
+      args:
+        executable: /bin/sh
+      changed_when: false
+      failed_when: false
+      register: edge_discovery_dns_listeners
+
+    - name: Discover provider-side addresses
+      ansible.builtin.command: ip -o -4 addr show scope global
+      changed_when: false
+      register: edge_discovery_node_addrs
+
+    - name: Report OpenStack node discovery values
+      ansible.builtin.debug:
+        msg:
+          provider_route: "{{ edge_discovery_provider_route.stdout }}"
+          global_addresses: "{{ edge_discovery_node_addrs.stdout_lines }}"
+          dns_listeners: "{{ edge_discovery_dns_listeners.stdout_lines }}"

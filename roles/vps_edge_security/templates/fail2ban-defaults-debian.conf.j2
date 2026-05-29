@@ -1,0 +1,8 @@
+# Ansible managed: Fail2ban defaults for VPS edge.
+[DEFAULT]
+banaction = {{ edge_security_fail2ban_banaction }}
+banaction_allports = {{ edge_security_fail2ban_banaction }}[type=allports]
+backend = {{ edge_security_fail2ban_backend }}
+
+[sshd]
+enabled = true

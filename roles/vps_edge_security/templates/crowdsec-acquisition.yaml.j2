@@ -1,0 +1,10 @@
+# Ansible managed: CrowdSec acquisition source.
+filenames:
+{% for filename in item.filenames %}
+  - {{ filename }}
+{% endfor %}
+labels:
+{% for key, value in item.labels.items() %}
+  {{ key }}: {{ value }}
+{% endfor %}
+source: {{ item.source | default('file') }}

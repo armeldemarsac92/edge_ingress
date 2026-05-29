@@ -1,0 +1,50 @@
+---
+- name: Add stable edge source IP on loopback
+  ansible.builtin.command:
+    cmd: "ip addr replace {{ edge_vps_loopback_addr }} dev lo"
+  changed_when: false
+
+- name: Set VPS WireGuard managed interfaces
+  ansible.builtin.set_fact:
+    edge_wireguard_managed_interfaces: "{{ wireguard_links | dict2items | map(attribute='value.vps_if') | list }}"
+
+- name: Validate VPS per-link WireGuard keys
+  ansible.builtin.assert:
+    that:
+      - edge_wireguard_generated_private_keys[item.value.vps_if] is defined
+      - hostvars[item.key].edge_wireguard_generated_public_keys[item.value.node_if] is defined
+    quiet: true
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_if }}"
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Render VPS WireGuard configs
+  ansible.builtin.template:
+    src: wg-quick.conf.j2
+    dest: "{{ edge_wireguard_config_dir }}/{{ item.value.vps_if }}.conf"
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    wg_interface_name: "{{ item.value.vps_if }}"
+    wg_address: "{{ item.value.vps_addr }}"
+    wg_listen_port: "{{ item.value.vps_listen_port }}"
+    wg_private_key: "{{ edge_wireguard_generated_private_keys[item.value.vps_if] }}"
+    wg_peer_public_key: "{{ hostvars[item.key].edge_wireguard_generated_public_keys[item.value.node_if] }}"
+    wg_peer_allowed_ips: "{{ edge_wireguard_vps_peer_allowed_ips }}"
+    wg_peer_endpoint: ""
+    wg_persistent_keepalive: 0
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_if }}"
+  notify: Restart WireGuard interfaces
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
+- name: Enable and start VPS WireGuard interfaces
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ item }}"
+    enabled: true
+    state: started
+  loop: "{{ edge_wireguard_managed_interfaces }}"
+  when: not ansible_check_mode

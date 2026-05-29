@@ -1,0 +1,41 @@
+---
+- name: Validate WireGuard inputs
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Refresh apt cache before WireGuard package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install WireGuard packages
+  ansible.builtin.package:
+    name: "{{ edge_wireguard_packages[ansible_os_family] | default(edge_wireguard_packages.Debian) }}"
+    state: present
+
+- name: Ensure WireGuard config directory exists
+  ansible.builtin.file:
+    path: "{{ edge_wireguard_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Ensure WireGuard key directory exists
+  ansible.builtin.file:
+    path: "{{ edge_wireguard_key_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Generate and load WireGuard keys
+  ansible.builtin.import_tasks: keys.yml
+
+- name: Configure VPS WireGuard interfaces
+  ansible.builtin.import_tasks: vps.yml
+  when: "'edge_vps' in group_names"
+
+- name: Configure OpenStack node WireGuard interface
+  ansible.builtin.import_tasks: node.yml
+  when: "'openstack_edge_nodes' in group_names"

@@ -1,0 +1,12 @@
+---
+- name: Import Phase 1 - WireGuard and private DNS
+  ansible.builtin.import_playbook: phase1-wireguard-dns.yml
+
+- name: Import Phase 2 - routed data plane
+  ansible.builtin.import_playbook: phase2-routing.yml
+
+- name: Import Phase 3 - public edge
+  ansible.builtin.import_playbook: phase3-public-edge.yml
+
+- name: Import Phase 4 - Authentik identity broker
+  ansible.builtin.import_playbook: phase4-authentik.yml

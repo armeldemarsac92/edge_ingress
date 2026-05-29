@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up Edge Authentik
+Requires=authentik-compose.service
+After=authentik-compose.service
+
+[Service]
+Type=oneshot
+ExecStart={{ authentik_base_dir }}/bin/backup.sh

@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+BASE_DIR="{{ authentik_base_dir }}"
+RETENTION_DAYS="{{ authentik_backup_retention_days | int }}"
+STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+DEST="${BASE_DIR}/backups/${STAMP}"
+
+mkdir -p "${DEST}"
+cd "${BASE_DIR}"
+
+/usr/bin/docker compose -f "${BASE_DIR}/compose.yml" exec -T postgresql \
+  pg_dump -U authentik -d authentik -cC > "${DEST}/postgresql.sql"
+
+tar -czf "${DEST}/files.tgz" \
+  .env \
+  compose.yml \
+  media \
+  custom-templates \
+  blueprints
+
+find "${BASE_DIR}/backups" -mindepth 1 -maxdepth 1 -type d -mtime +"${RETENTION_DAYS}" -exec rm -rf {} +

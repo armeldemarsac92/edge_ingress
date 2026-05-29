@@ -1,0 +1,14 @@
+[Unit]
+Description=VPS edge private DNS resolver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/install -d -o {{ vps_private_resolver_user }} -g {{ vps_private_resolver_user }} -m 0755 /run/{{ vps_private_resolver_service_name }}
+ExecStart={{ vps_private_resolver_binary }} -d -c {{ vps_private_resolver_config_path }}
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

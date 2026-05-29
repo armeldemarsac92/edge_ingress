@@ -1,0 +1,19 @@
+---
+edge_routing_mode: static
+edge_static_route_metric_base: 100
+edge_static_route_metric_step: 100
+edge_routing_service_name: vps-edge-routes
+edge_routing_ip_bin: /usr/sbin/ip
+edge_vps_loopback_addr: 10.255.255.1/32
+
+edge_frr_local_as: 65077
+edge_frr_node_as_base: 65100
+edge_frr_router_id: "{{ ansible_default_ipv4.address | default('127.0.0.1') }}"
+edge_frr_maximum_paths: "{{ wireguard_links | default({}) | length }}"
+edge_frr_vps_neighbor_description: "{{ edge_vps_inventory_name | default('vps-edge') }}"
+edge_frr_packages:
+  Debian:
+    - frr
+    - frr-pythontools
+  RedHat:
+    - frr

@@ -1,0 +1,53 @@
+! Ansible managed
+frr version 8.0
+frr defaults traditional
+hostname {{ inventory_hostname }}
+log syslog informational
+service integrated-vtysh-config
+!
+{% if 'edge_vps' in group_names %}
+ip prefix-list EDGE-PROVIDER seq 10 permit {{ provider_cidr }}
+!
+route-map SET-EDGE-SRC permit 10
+ match ip address prefix-list EDGE-PROVIDER
+ set src {{ edge_vps_loopback_addr.split('/')[0] }}
+exit
+!
+route-map SET-EDGE-SRC permit 100
+exit
+!
+ip protocol bgp route-map SET-EDGE-SRC
+!
+{% endif %}
+router bgp {{ edge_frr_local_as if 'edge_vps' in group_names else edge_frr_node_as_base + (edge_node_id | int) }}
+ bgp router-id {{ edge_frr_router_id }}
+ no bgp ebgp-requires-policy
+{% if 'edge_vps' in group_names %}
+ bgp bestpath as-path multipath-relax
+{% endif %}
+ timers bgp 3 9
+{% if 'edge_vps' in group_names %}
+{% for item in wireguard_links | dict2items %}
+ neighbor {{ item.value.node_addr.split('/')[0] }} remote-as {{ edge_frr_node_as_base + (item.value.edge_node_id | int) }}
+ neighbor {{ item.value.node_addr.split('/')[0] }} description {{ item.key }} provider path
+ neighbor {{ item.value.node_addr.split('/')[0] }} bfd
+{% endfor %}
+ address-family ipv4 unicast
+  network {{ edge_vps_loopback_addr }}
+  maximum-paths {{ edge_frr_maximum_paths | int }}
+{% for item in wireguard_links | dict2items %}
+  neighbor {{ item.value.node_addr.split('/')[0] }} activate
+{% endfor %}
+ exit-address-family
+{% else %}
+{% set link = wireguard_links[edge_node_name | default(inventory_hostname)] %}
+ neighbor {{ link.vps_addr.split('/')[0] }} remote-as {{ edge_frr_local_as }}
+ neighbor {{ link.vps_addr.split('/')[0] }} description {{ edge_frr_vps_neighbor_description }}
+ neighbor {{ link.vps_addr.split('/')[0] }} bfd
+ address-family ipv4 unicast
+  network {{ provider_cidr }}
+  neighbor {{ link.vps_addr.split('/')[0] }} activate
+ exit-address-family
+{% endif %}
+!
+line vty

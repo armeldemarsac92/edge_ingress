@@ -1,0 +1,156 @@
+---
+- name: Skip Authentik when disabled
+  ansible.builtin.debug:
+    msg: "authentik_enabled is false; skipping Authentik deployment."
+  when: not authentik_enabled | bool
+
+- name: Configure Authentik
+  when: authentik_enabled | bool
+  block:
+    - name: Validate Authentik inputs
+      ansible.builtin.assert:
+        that:
+          - authentik_domain is match('^[A-Za-z0-9_.-]+$')
+          - authentik_http_bind is match('^[0-9.]+:[0-9]+$')
+          - authentik_base_dir is match('^/')
+          - authentik_docker_subnet is match('^[0-9.]+/[0-9]+$')
+        fail_msg: "Invalid Authentik inventory variables."
+        quiet: true
+
+    - name: Refresh apt cache before Docker package install
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker packages
+      ansible.builtin.package:
+        name: "{{ authentik_docker_packages[ansible_os_family] | default(authentik_docker_packages.Debian) }}"
+        state: present
+
+    - name: Enable and start Docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+      when: not ansible_check_mode
+
+    - name: Enable memory overcommit for Redis
+      ansible.posix.sysctl:
+        name: vm.overcommit_memory
+        value: "1"
+        state: present
+        reload: true
+
+    - name: Create Authentik directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode | default('0755') }}"
+      loop:
+        - path: "{{ authentik_base_dir }}"
+          mode: "0750"
+        - path: "{{ authentik_base_dir }}/bin"
+        - path: "{{ authentik_base_dir }}/blueprints"
+        - path: "{{ authentik_base_dir }}/backups"
+          mode: "0750"
+        - path: "{{ authentik_base_dir }}/custom-templates"
+        - path: "{{ authentik_base_dir }}/media"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Check Authentik secret env file
+      ansible.builtin.stat:
+        path: "{{ authentik_base_dir }}/.env"
+      register: authentik_env_stat
+
+    - name: Generate initial Authentik secrets
+      ansible.builtin.set_fact:
+        authentik_generated_pg_pass: "{{ lookup('ansible.builtin.password', '/dev/null length=48 chars=ascii_letters,digits') }}"
+        authentik_generated_secret_key: "{{ lookup('ansible.builtin.password', '/dev/null length=72 chars=ascii_letters,digits') }}"
+      no_log: true
+      when: not authentik_env_stat.stat.exists
+
+    - name: Render initial Authentik env file
+      ansible.builtin.template:
+        src: authentik.env.j2
+        dest: "{{ authentik_base_dir }}/.env"
+        owner: root
+        group: root
+        mode: "0600"
+        force: false
+      no_log: true
+      when: not authentik_env_stat.stat.exists
+
+    - name: Render Authentik Compose file
+      ansible.builtin.template:
+        src: compose.yml.j2
+        dest: "{{ authentik_base_dir }}/compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Authentik stack
+
+    - name: Render Authentik backup script
+      ansible.builtin.template:
+        src: backup.sh.j2
+        dest: "{{ authentik_base_dir }}/bin/backup.sh"
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Render Authentik Compose systemd unit
+      ansible.builtin.template:
+        src: authentik-compose.service.j2
+        dest: /etc/systemd/system/authentik-compose.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart Authentik stack
+
+    - name: Render Authentik backup systemd service
+      ansible.builtin.template:
+        src: authentik-backup.service.j2
+        dest: /etc/systemd/system/authentik-backup.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+    - name: Render Authentik backup systemd timer
+      ansible.builtin.template:
+        src: authentik-backup.timer.j2
+        dest: /etc/systemd/system/authentik-backup.timer
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload systemd
+
+    - name: Flush Authentik handlers before service start
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start Authentik stack
+      ansible.builtin.systemd:
+        name: authentik-compose.service
+        enabled: true
+        state: started
+      when: not ansible_check_mode
+
+    - name: Apply Authentik default blueprints
+      ansible.builtin.command:
+        cmd: docker compose -f {{ authentik_base_dir }}/compose.yml exec -T server sh -c 'ak apply_blueprint /blueprints/default/*.yaml /blueprints/system/bootstrap.yaml'
+      changed_when: false
+      when:
+        - not ansible_check_mode
+        - authentik_apply_default_blueprints | bool
+
+    - name: Manage Authentik backup timer
+      ansible.builtin.systemd:
+        name: authentik-backup.timer
+        enabled: "{{ authentik_backup_enabled | bool }}"
+        state: "{{ 'started' if authentik_backup_enabled | bool else 'stopped' }}"
+      when: not ansible_check_mode

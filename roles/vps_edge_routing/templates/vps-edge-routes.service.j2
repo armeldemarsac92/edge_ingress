@@ -1,0 +1,17 @@
+[Unit]
+Description=VPS edge static routes to OpenStack provider network
+After=network-online.target{% for item in wireguard_links | dict2items %} wg-quick@{{ item.value.vps_if }}.service{% endfor %}
+Wants=network-online.target
+{% for item in wireguard_links | dict2items %}
+Requires=wg-quick@{{ item.value.vps_if }}.service
+{% endfor %}
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+{% for item in wireguard_links | dict2items %}
+ExecStart={{ edge_routing_ip_bin }} route replace {{ provider_cidr }} dev {{ item.value.vps_if }} metric {{ edge_static_route_metric_base + (loop.index0 * edge_static_route_metric_step) }}
+{% endfor %}
+
+[Install]
+WantedBy=multi-user.target

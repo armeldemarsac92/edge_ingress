@@ -1,0 +1,16 @@
+---
+- name: Validate routing mode
+  ansible.builtin.assert:
+    that:
+      - edge_routing_mode in ["static", "frr"]
+    quiet: true
+
+- name: Configure static VPS routes
+  ansible.builtin.import_tasks: static.yml
+  when:
+    - edge_routing_mode == "static"
+    - "'edge_vps' in group_names"
+
+- name: Configure FRR routing
+  ansible.builtin.import_tasks: frr.yml
+  when: edge_routing_mode == "frr"

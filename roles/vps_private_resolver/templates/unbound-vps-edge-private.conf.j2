@@ -1,0 +1,28 @@
+# Ansible managed: private resolver for edge proxy origin lookups.
+server:
+    username: "{{ vps_private_resolver_user }}"
+    directory: "/etc/unbound"
+    pidfile: "/run/{{ vps_private_resolver_service_name }}/unbound.pid"
+    interface: {{ vps_private_resolver_bind_address }}
+    port: {{ vps_private_resolver_bind_port }}
+    do-ip4: yes
+    do-ip6: no
+    do-udp: yes
+    do-tcp: yes
+    access-control: 127.0.0.0/8 allow
+    access-control: 0.0.0.0/0 refuse
+    hide-identity: yes
+    hide-version: yes
+    harden-glue: yes
+    harden-dnssec-stripped: yes
+    use-syslog: yes
+    verbosity: 1
+    private-address: {{ provider_cidr }}
+
+{% for zone in edge_private_dns_zones %}
+forward-zone:
+    name: "{{ zone }}."
+{% for forwarder in edge_dns_forwarders %}
+    forward-addr: {{ forwarder }}@53
+{% endfor %}
+{% endfor %}

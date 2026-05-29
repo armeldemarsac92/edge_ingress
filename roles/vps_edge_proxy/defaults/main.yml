@@ -1,0 +1,43 @@
+---
+edge_proxy_enabled: true
+edge_proxy_backend: haproxy
+edge_proxy_manage_nginx_stream_include: true
+edge_proxy_nginx_service_name: nginx
+edge_proxy_nginx_stream_dir: /etc/nginx/stream-conf.d
+edge_proxy_nginx_http_config: /etc/nginx/conf.d/vps-edge-http.conf
+edge_proxy_nginx_stream_config: /etc/nginx/stream-conf.d/vps-edge-stream.conf
+edge_proxy_resolver: 127.0.0.1
+edge_proxy_resolver_valid: 30s
+edge_proxy_tls_fallback: 127.0.0.1:9
+
+edge_proxy_haproxy_service_name: haproxy
+edge_proxy_haproxy_config: /etc/haproxy/haproxy.cfg
+edge_proxy_haproxy_stats_socket: /run/haproxy/admin.sock
+edge_proxy_haproxy_cert_dir: /etc/haproxy/certs
+edge_proxy_haproxy_cert_bundles: []
+edge_proxy_haproxy_local_tls_bind_host: 127.0.0.1
+edge_proxy_haproxy_local_tls_bind_port_base: 18443
+edge_proxy_haproxy_local_tls_routes: []
+edge_proxy_haproxy_crowdsec_enabled: false
+edge_proxy_haproxy_crowdsec_lua_path: /usr/lib/crowdsec-haproxy-spoa-bouncer/lua
+edge_proxy_haproxy_crowdsec_lua_file: /usr/lib/crowdsec-haproxy-spoa-bouncer/lua/crowdsec.lua
+edge_proxy_haproxy_crowdsec_ban_template_path: /var/lib/crowdsec-haproxy-spoa-bouncer/html/ban.html
+edge_proxy_haproxy_crowdsec_captcha_template_path: /var/lib/crowdsec-haproxy-spoa-bouncer/html/captcha.html
+edge_proxy_haproxy_crowdsec_spoe_config: /etc/haproxy/crowdsec.cfg
+edge_proxy_haproxy_crowdsec_backend_name: crowdsec-spoa
+edge_proxy_haproxy_crowdsec_backend_host: 127.0.0.1
+edge_proxy_haproxy_crowdsec_backend_port: 9001
+edge_local_http_apps: []
+
+edge_proxy_nginx_packages:
+  Debian:
+    - nginx
+    - libnginx-mod-stream
+  RedHat:
+    - nginx
+
+edge_proxy_haproxy_packages:
+  Debian:
+    - haproxy
+  RedHat:
+    - haproxy

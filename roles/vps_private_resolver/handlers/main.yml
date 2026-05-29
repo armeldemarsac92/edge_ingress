@@ -1,0 +1,12 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Restart VPS private resolver
+  ansible.builtin.systemd:
+    name: "{{ vps_private_resolver_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode

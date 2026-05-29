@@ -1,0 +1,9 @@
+[Unit]
+Description=Run Edge Authentik backup
+
+[Timer]
+OnCalendar={{ authentik_backup_timer_on_calendar }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Restart OpenStack edge DNS
+  ansible.builtin.systemd:
+    name: "{{ openstack_edge_dns_service_name }}"
+    state: restarted
+    daemon_reload: true
+  when: not ansible_check_mode

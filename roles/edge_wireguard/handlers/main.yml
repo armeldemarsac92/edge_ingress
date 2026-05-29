@@ -1,0 +1,7 @@
+---
+- name: Restart WireGuard interfaces
+  ansible.builtin.systemd:
+    name: "wg-quick@{{ item }}"
+    state: restarted
+  loop: "{{ edge_wireguard_managed_interfaces | default([]) }}"
+  when: not ansible_check_mode

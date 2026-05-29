@@ -1,0 +1,26 @@
+---
+- name: Validate NGINX configuration
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  listen: Reload NGINX
+  when: not ansible_check_mode
+
+- name: Reload NGINX
+  ansible.builtin.systemd:
+    name: "{{ edge_proxy_nginx_service_name }}"
+    state: reloaded
+  listen: Reload NGINX
+  when: not ansible_check_mode
+
+- name: Validate HAProxy configuration
+  ansible.builtin.command: "haproxy -c -f {{ edge_proxy_haproxy_config }}"
+  changed_when: false
+  listen: Reload HAProxy
+  when: not ansible_check_mode
+
+- name: Reload HAProxy
+  ansible.builtin.systemd:
+    name: "{{ edge_proxy_haproxy_service_name }}"
+    state: reloaded
+  listen: Reload HAProxy
+  when: not ansible_check_mode

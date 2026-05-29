@@ -1,0 +1,54 @@
+---
+- name: Validate nftables firewall inputs
+  ansible.builtin.assert:
+    that:
+      - edge_admin_ssh_sources | length > 0
+    fail_msg: "Set edge_admin_ssh_sources before enabling the nftables VPS firewall backend."
+    quiet: true
+
+- name: Refresh apt cache before nftables package install
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_os_family == "Debian"
+
+- name: Install nftables package
+  ansible.builtin.package:
+    name: "{{ edge_firewall_packages[ansible_os_family] | default(edge_firewall_packages.Debian) }}"
+    state: present
+
+- name: Ensure nftables include directory exists
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render VPS edge firewall rules
+  ansible.builtin.template:
+    src: vps-edge-firewall.nft.j2
+    dest: "{{ edge_firewall_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart VPS edge firewall
+
+- name: Render VPS edge firewall service
+  ansible.builtin.template:
+    src: vps-edge-firewall.service.j2
+    dest: "/etc/systemd/system/{{ edge_firewall_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart VPS edge firewall
+
+- name: Enable and start VPS edge firewall service
+  ansible.builtin.systemd:
+    name: "{{ edge_firewall_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: not ansible_check_mode

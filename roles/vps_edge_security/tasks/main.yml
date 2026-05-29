@@ -1,0 +1,134 @@
+---
+- name: Skip VPS edge security when disabled
+  ansible.builtin.debug:
+    msg: "edge_security_enabled is false; no VPS security services were managed."
+  when: not edge_security_enabled | bool
+
+- name: Configure VPS edge security
+  when: edge_security_enabled | bool
+  block:
+    - name: Refresh apt cache before security package install
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install CrowdSec packages
+      ansible.builtin.package:
+        name: "{{ edge_security_crowdsec_packages[ansible_os_family] | default(edge_security_crowdsec_packages.Debian) }}"
+        state: present
+      when: edge_security_crowdsec_enabled | bool
+
+    - name: Install Fail2ban packages
+      ansible.builtin.package:
+        name: "{{ edge_security_fail2ban_packages[ansible_os_family] | default(edge_security_fail2ban_packages.Debian) }}"
+        state: present
+      when: edge_security_fail2ban_enabled | bool
+
+    - name: Ensure CrowdSec acquisition directory exists
+      ansible.builtin.file:
+        path: "{{ edge_security_crowdsec_acquisition_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: edge_security_crowdsec_enabled | bool
+
+    - name: Render CrowdSec acquisition configs
+      ansible.builtin.template:
+        src: crowdsec-acquisition.yaml.j2
+        dest: "{{ edge_security_crowdsec_acquisition_dir }}/{{ item.name }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ edge_security_crowdsec_acquisitions }}"
+      loop_control:
+        label: "{{ item.name }}"
+      notify: Restart CrowdSec
+      when: edge_security_crowdsec_enabled | bool
+
+    - name: Inspect CrowdSec collections
+      ansible.builtin.command: "cscli collections inspect {{ item }}"
+      register: edge_security_crowdsec_collection_inspections
+      changed_when: false
+      failed_when: false
+      loop: "{{ edge_security_crowdsec_collections }}"
+      loop_control:
+        label: "{{ item }}"
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - not ansible_check_mode
+
+    - name: Install missing CrowdSec collections
+      ansible.builtin.command: "cscli collections install {{ item.item }}"
+      changed_when: true
+      loop: "{{ edge_security_crowdsec_collection_inspections.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - not ansible_check_mode
+        - item.rc != 0
+      notify: Restart CrowdSec
+
+    - name: Check CrowdSec bouncer configs
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: edge_security_crowdsec_bouncer_config_stats
+      loop: "{{ edge_security_crowdsec_bouncer_configs }}"
+      loop_control:
+        label: "{{ item }}"
+      when: edge_security_crowdsec_enabled | bool
+
+    - name: Stop when CrowdSec bouncer configs are missing
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Missing CrowdSec bouncer config: {{ item.item }}. Register the bouncer before enabling Ansible management."
+        quiet: true
+      loop: "{{ edge_security_crowdsec_bouncer_config_stats.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item }}"
+      when: edge_security_crowdsec_enabled | bool
+
+    - name: Render HAProxy CrowdSec SPOE config
+      ansible.builtin.template:
+        src: haproxy-crowdsec.cfg.j2
+        dest: "{{ edge_security_haproxy_spoe_config }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Reload HAProxy for security config
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - edge_proxy_haproxy_crowdsec_enabled | default(false) | bool
+
+    - name: Enable and start CrowdSec services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop: "{{ edge_security_crowdsec_services }}"
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - not ansible_check_mode
+
+    - name: Render Fail2ban jail defaults
+      ansible.builtin.template:
+        src: fail2ban-defaults-debian.conf.j2
+        dest: "{{ edge_security_fail2ban_jail_config }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Fail2ban
+      when: edge_security_fail2ban_enabled | bool
+
+    - name: Enable and start Fail2ban
+      ansible.builtin.systemd:
+        name: fail2ban
+        enabled: true
+        state: started
+      when:
+        - edge_security_fail2ban_enabled | bool
+        - not ansible_check_mode
