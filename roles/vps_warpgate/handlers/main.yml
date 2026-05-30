@@ -1,0 +1,11 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Restart Warpgate stack
+  ansible.builtin.systemd:
+    name: warpgate-compose.service
+    state: restarted
+  when: not ansible_check_mode

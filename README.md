@@ -220,6 +220,7 @@ playbooks/
   phase2-routing.yml
   phase3-public-edge.yml
   phase4-authentik.yml
+  phase5-warpgate.yml
   site.yml
   validate.yml
   validate-authentik.yml
@@ -233,8 +234,11 @@ roles/
   vps_edge_proxy/
   vps_edge_firewall/
   vps_authentik/
+  vps_warpgate/
+  openstack_warpgate_access/
 docs/
   authentik-identity-broker.md
+  warpgate-ssh-access.md
   operator-checklist.md
 ```
 
@@ -281,6 +285,7 @@ SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase1-wire
 SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase2-routing.yml
 SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase3-public-edge.yml
 SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase4-authentik.yml
+SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase5-warpgate.yml
 ```
 
 Or apply the full site:
@@ -339,9 +344,14 @@ VPS-specific options live in
 | `authentik_enabled` | `true` | Deploys the Authentik Docker Compose stack on the edge VPS. |
 | `authentik_domain` | `auth.example.net` | Public Authentik hostname. |
 | `authentik_haproxy_enabled` | `true` | Enables HAProxy TLS termination for Authentik after a real cert is present. |
+| `warpgate_enabled` | `true` | Deploys Warpgate as the SSH access broker. |
+| `warpgate_domain` | `warpgate.example.net` | Public Warpgate web UI hostname. |
+| `warpgate_ssh_public_port` | `2222` | Public SSH entry point for Warpgate-managed SSH sessions. |
 
 The Authentik identity broker plan and runbook live in
 `docs/authentik-identity-broker.md`.
+
+The Warpgate SSH access runbook lives in `docs/warpgate-ssh-access.md`.
 
 OpenStack-node options live in
 `inventories/production/group_vars/openstack_edge_nodes/main.yml`.
@@ -398,6 +408,7 @@ Rollback entry points:
 
 ```bash
 systemctl stop haproxy
+systemctl stop warpgate-compose
 systemctl stop wg-quick@wg-os1 wg-quick@wg-os2 wg-quick@wg-os3
 systemctl stop wg-quick@wg-vps
 systemctl stop vps-edge-gateway-nftables

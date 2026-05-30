@@ -157,7 +157,7 @@ frontend edge_local_https_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
 
 backend edge_local_http_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
     mode http
-    server origin {{ route.backend_host }}:{{ route.backend_port }} check
+    server origin {{ route.backend_host }}:{{ route.backend_port }}{% if route.backend_tls | default(false) | bool %} ssl verify {{ 'required' if route.backend_tls_verify | default(false) | bool else 'none' }}{% endif %} check
 {% endfor %}
 {% for forward in edge_tcp_forwards | default([]) %}
 

@@ -10,3 +10,6 @@
 
 - name: Import Phase 4 - Authentik identity broker
   ansible.builtin.import_playbook: phase4-authentik.yml
+
+- name: Import Phase 5 - Warpgate SSH access broker
+  ansible.builtin.import_playbook: phase5-warpgate.yml

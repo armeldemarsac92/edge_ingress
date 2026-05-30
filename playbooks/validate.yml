@@ -110,6 +110,27 @@
       failed_when: edge_validation_vps_fail2ban.stdout != "active"
       when: edge_security_fail2ban_enabled | default(false) | bool
 
+    - name: Check Warpgate service state when enabled
+      ansible.builtin.command: systemctl is-active warpgate-compose
+      changed_when: false
+      register: edge_validation_warpgate_service
+      failed_when: edge_validation_warpgate_service.stdout != "active"
+      when: warpgate_enabled | default(false) | bool
+
+    - name: Check Warpgate config when enabled
+      ansible.builtin.command: docker compose -f {{ warpgate_base_dir }}/compose.yml exec -T warpgate warpgate --config /data/warpgate.yaml check
+      changed_when: false
+      when: warpgate_enabled | default(false) | bool
+
+    - name: Check Warpgate SSH listener when enabled
+      ansible.builtin.command: ss -ltn
+      changed_when: false
+      register: edge_validation_warpgate_listeners
+      failed_when: edge_validation_warpgate_listeners.stdout is not search(':' ~ (warpgate_ssh_public_port | string))
+      when:
+        - warpgate_enabled | default(false) | bool
+        - warpgate_ssh_enabled | default(true) | bool
+
 - name: Validate OpenStack edge node services
   hosts: openstack_edge_nodes
   gather_facts: false

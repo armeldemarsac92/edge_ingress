@@ -1,0 +1,216 @@
+---
+- name: Skip Warpgate when disabled
+  ansible.builtin.debug:
+    msg: "warpgate_enabled is false; skipping Warpgate deployment."
+  when: not warpgate_enabled | bool
+
+- name: Configure Warpgate
+  when: warpgate_enabled | bool
+  block:
+    - name: Validate Warpgate inputs
+      ansible.builtin.assert:
+        that:
+          - warpgate_domain is match('^[A-Za-z0-9_.-]+$')
+          - warpgate_external_host | length > 0
+          - warpgate_http_bind is match('^[0-9.]+:[0-9]+$')
+          - warpgate_ssh_bind is match('^[0-9.]+:[0-9]+:[0-9]+$')
+          - warpgate_base_dir is match('^/')
+          - warpgate_http_port | int > 0
+          - warpgate_ssh_public_port | int > 0
+          - warpgate_ssh_container_port | int > 0
+        fail_msg: "Invalid Warpgate inventory variables."
+        quiet: true
+
+    - name: Refresh apt cache before Docker package install
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install Docker packages
+      ansible.builtin.package:
+        name: "{{ warpgate_docker_packages[ansible_os_family] | default(warpgate_docker_packages.Debian) }}"
+        state: present
+
+    - name: Enable and start Docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+      when: not ansible_check_mode
+
+    - name: Create Warpgate directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode | default('0755') }}"
+      loop:
+        - path: "{{ warpgate_base_dir }}"
+          mode: "0750"
+        - path: "{{ warpgate_base_dir }}/data"
+          mode: "0750"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Check Warpgate env file
+      ansible.builtin.stat:
+        path: "{{ warpgate_base_dir }}/.env"
+      register: warpgate_env_stat
+
+    - name: Generate initial Warpgate secrets
+      ansible.builtin.set_fact:
+        warpgate_generated_admin_password: "{{ lookup('ansible.builtin.password', '/dev/null length=48 chars=ascii_letters,digits') }}"
+        warpgate_generated_admin_token: "{{ lookup('ansible.builtin.password', '/dev/null length=72 chars=ascii_letters,digits') }}"
+      no_log: "{{ warpgate_hide_secrets }}"
+      when: not warpgate_env_stat.stat.exists
+
+    - name: Render initial Warpgate env file
+      ansible.builtin.template:
+        src: warpgate.env.j2
+        dest: "{{ warpgate_base_dir }}/.env"
+        owner: root
+        group: root
+        mode: "0600"
+        force: false
+      no_log: "{{ warpgate_hide_secrets }}"
+      when: not warpgate_env_stat.stat.exists
+
+    - name: Read Warpgate env file
+      ansible.builtin.slurp:
+        src: "{{ warpgate_base_dir }}/.env"
+      register: warpgate_env_slurp
+      no_log: "{{ warpgate_hide_secrets }}"
+      when: not ansible_check_mode
+
+    - name: Set Warpgate secret facts
+      ansible.builtin.set_fact:
+        warpgate_admin_password_effective: "{{ ((warpgate_env_slurp.content | b64decode).splitlines() | select('match', '^WARPGATE_ADMIN_PASSWORD=') | first | default('')) | regex_replace('^WARPGATE_ADMIN_PASSWORD=', '') }}"
+        warpgate_admin_token_effective: "{{ ((warpgate_env_slurp.content | b64decode).splitlines() | select('match', '^WARPGATE_ADMIN_TOKEN=') | first | default('')) | regex_replace('^WARPGATE_ADMIN_TOKEN=', '') }}"
+      no_log: "{{ warpgate_hide_secrets }}"
+      when: not ansible_check_mode
+
+    - name: Render Warpgate Compose file
+      ansible.builtin.template:
+        src: compose.yml.j2
+        dest: "{{ warpgate_base_dir }}/compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Warpgate stack
+
+    - name: Check Warpgate config file
+      ansible.builtin.stat:
+        path: "{{ warpgate_base_dir }}/data/warpgate.yaml"
+      register: warpgate_config_stat
+
+    - name: Run initial Warpgate setup
+      ansible.builtin.command:
+        cmd: >-
+          docker compose -f {{ warpgate_base_dir }}/compose.yml run --rm --no-deps
+          warpgate --config /data/warpgate.yaml unattended-setup
+          --data-path /data
+          --http-port {{ warpgate_http_port }}
+          --ssh-port {{ warpgate_ssh_container_port }}
+          {{ '--record-sessions' if warpgate_record_sessions | bool else '' }}
+          --external-host {{ warpgate_external_host }}
+      environment:
+        WARPGATE_ADMIN_PASSWORD: "{{ warpgate_admin_password_effective }}"
+      changed_when: true
+      no_log: "{{ warpgate_hide_secrets }}"
+      when:
+        - not ansible_check_mode
+        - not warpgate_config_stat.stat.exists
+
+    - name: Render managed Warpgate config
+      ansible.builtin.template:
+        src: warpgate.yaml.j2
+        dest: "{{ warpgate_base_dir }}/data/warpgate.yaml"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: "{{ warpgate_hide_secrets }}"
+      notify: Restart Warpgate stack
+
+    - name: Render Warpgate Compose systemd unit
+      ansible.builtin.template:
+        src: warpgate-compose.service.j2
+        dest: /etc/systemd/system/warpgate-compose.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart Warpgate stack
+
+    - name: Flush Warpgate handlers before service start
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start Warpgate stack
+      ansible.builtin.systemd:
+        name: warpgate-compose.service
+        enabled: true
+        state: started
+      when: not ansible_check_mode
+
+    - name: Wait for Warpgate HTTP listener
+      ansible.builtin.wait_for:
+        host: "{{ warpgate_http_bind_host }}"
+        port: "{{ warpgate_http_port }}"
+        timeout: 60
+      when: not ansible_check_mode
+
+    - name: Check Warpgate config inside the container
+      ansible.builtin.command:
+        cmd: docker compose -f {{ warpgate_base_dir }}/compose.yml exec -T warpgate warpgate --config /data/warpgate.yaml check
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Read Warpgate client public keys
+      ansible.builtin.command:
+        cmd: docker compose -f {{ warpgate_base_dir }}/compose.yml exec -T warpgate warpgate --config /data/warpgate.yaml client-keys
+      changed_when: false
+      register: warpgate_client_keys_command
+      when: not ansible_check_mode
+
+    - name: Set Warpgate client public key fact
+      ansible.builtin.set_fact:
+        warpgate_client_public_key: "{{ (warpgate_client_keys_command.stdout_lines | select('match', '^ssh-') | list | first) }}"
+      when:
+        - not ansible_check_mode
+        - warpgate_client_keys_command.stdout_lines | select('match', '^ssh-') | list | length > 0
+
+    - name: Add Warpgate local HTTP app route for HAProxy
+      ansible.builtin.set_fact:
+        edge_local_http_apps: "{{ (edge_local_http_apps | default([])) + [warpgate_haproxy_app] }}"
+      when: warpgate_haproxy_enabled | bool
+
+    - name: Add Warpgate SSH public port to firewall extras
+      ansible.builtin.set_fact:
+        edge_firewall_public_tcp_ports_extra: "{{ ((edge_firewall_public_tcp_ports_extra | default([])) + [warpgate_ssh_public_port | int]) | unique | list }}"
+      when: warpgate_ssh_enabled | bool
+
+    - name: Build default Warpgate SSH target list
+      ansible.builtin.set_fact:
+        warpgate_default_ssh_targets: "{{ (warpgate_default_ssh_targets | default([])) + [warpgate_default_ssh_target] }}"
+      vars:
+        warpgate_default_ssh_target:
+          name: "{{ item }}"
+          description: "Inventory host {{ item }}"
+          host: "{{ hostvars[item].warpgate_target_ssh_host | default(hostvars[item].ansible_host | default(item)) }}"
+          port: "{{ hostvars[item].warpgate_target_ssh_port | default(22) | int }}"
+          username: "{{ hostvars[item].warpgate_target_ssh_user | default(hostvars[item].ansible_user | default('ansible')) }}"
+      loop: "{{ groups[warpgate_default_targets_group] | default([]) }}"
+      when: warpgate_ssh_targets | length == 0
+
+    - name: Set effective Warpgate SSH targets
+      ansible.builtin.set_fact:
+        warpgate_ssh_targets_effective: "{{ warpgate_ssh_targets if warpgate_ssh_targets | length > 0 else warpgate_default_ssh_targets | default([]) }}"
+
+    - name: Synchronize Warpgate SSH targets
+      ansible.builtin.include_tasks: sync-targets.yml
+      when:
+        - not ansible_check_mode
+        - warpgate_manage_targets | bool
+        - warpgate_ssh_targets_effective | length > 0

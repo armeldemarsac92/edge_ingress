@@ -67,3 +67,18 @@ authentik_haproxy_cert_bundle:
   chain_src: "{{ authentik_haproxy_chain_src }}"
   key_src: "{{ authentik_haproxy_key_src }}"
   dest: "{{ authentik_haproxy_cert_path }}"
+
+warpgate_enabled: true
+warpgate_domain: "{{ lookup('env', 'WARPGATE_DOMAIN') | default('warpgate.' ~ edge_public_root_domain, true) }}"
+warpgate_external_host: "{{ warpgate_domain }}"
+warpgate_base_dir: "{{ lookup('env', 'WARPGATE_BASE_DIR') | default('/opt/edge/warpgate', true) }}"
+warpgate_http_bind_host: 127.0.0.1
+warpgate_http_port: "{{ lookup('env', 'WARPGATE_HTTP_PORT') | default('8888', true) | int }}"
+warpgate_ssh_public_port: "{{ lookup('env', 'WARPGATE_SSH_PUBLIC_PORT') | default('2222', true) | int }}"
+warpgate_ssh_container_port: 2222
+warpgate_haproxy_enabled: true
+warpgate_haproxy_cert_path: "{{ lookup('env', 'WARPGATE_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ warpgate_domain ~ '.pem', true) }}"
+warpgate_authentik_oidc_client_id: "{{ lookup('env', 'WARPGATE_OIDC_CLIENT_ID') | default('', true) }}"
+warpgate_authentik_oidc_client_secret: "{{ lookup('env', 'WARPGATE_OIDC_CLIENT_SECRET') | default('', true) }}"
+warpgate_sso_enabled: "{{ warpgate_authentik_oidc_client_id | length > 0 and warpgate_authentik_oidc_client_secret | length > 0 }}"
+warpgate_manage_targets: true

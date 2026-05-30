@@ -1,0 +1,74 @@
+---
+warpgate_enabled: false
+warpgate_base_dir: /opt/edge/warpgate
+warpgate_compose_project_name: warpgate
+
+warpgate_image: ghcr.io/warp-tech/warpgate
+warpgate_image_tag: "v0.23.4"
+
+warpgate_domain: warpgate.example.com
+warpgate_external_host: "{{ warpgate_domain }}"
+
+warpgate_http_bind_host: 127.0.0.1
+warpgate_http_port: 8888
+warpgate_http_bind: "{{ warpgate_http_bind_host }}:{{ warpgate_http_port }}"
+warpgate_http_trust_x_forwarded_headers: true
+
+warpgate_ssh_enabled: true
+warpgate_ssh_bind_host: 0.0.0.0
+warpgate_ssh_public_port: 2222
+warpgate_ssh_container_port: 2222
+warpgate_ssh_bind: "{{ warpgate_ssh_bind_host }}:{{ warpgate_ssh_public_port }}:{{ warpgate_ssh_container_port }}"
+warpgate_ssh_external_port: "{{ warpgate_ssh_public_port }}"
+
+warpgate_record_sessions: true
+warpgate_hide_secrets: true
+
+warpgate_manage_targets: true
+warpgate_default_targets_group: openstack_edge_nodes
+warpgate_ssh_targets: []
+
+warpgate_haproxy_enabled: true
+warpgate_haproxy_cert_path: /etc/haproxy/certs/{{ warpgate_domain }}.pem
+warpgate_haproxy_app:
+  name: warpgate
+  hostnames:
+    - "{{ warpgate_domain }}"
+  backend_host: "{{ warpgate_http_bind_host }}"
+  backend_port: "{{ warpgate_http_port }}"
+  backend_tls: true
+  backend_tls_verify: false
+  tls_cert: "{{ warpgate_haproxy_cert_path }}"
+  hsts: true
+
+warpgate_authentik_oidc_client_id: ""
+warpgate_authentik_oidc_client_secret: ""
+warpgate_authentik_oidc_issuer_url: "{{ 'https://' ~ authentik_domain ~ '/application/o/warpgate/' if authentik_domain is defined else '' }}"
+warpgate_sso_enabled: false
+warpgate_authentik_sso_provider:
+  name: authentik
+  label: Authentik
+  auto_create_users: true
+  default_credential_policy:
+    http:
+      - sso
+    ssh:
+      - web
+  provider:
+    type: custom
+    client_id: "{{ warpgate_authentik_oidc_client_id }}"
+    client_secret: "{{ warpgate_authentik_oidc_client_secret }}"
+    issuer_url: "{{ warpgate_authentik_oidc_issuer_url }}"
+    scopes:
+      - openid
+      - email
+      - profile
+warpgate_sso_providers: "{{ [warpgate_authentik_sso_provider] if warpgate_sso_enabled | bool else [] }}"
+
+warpgate_docker_packages:
+  Debian:
+    - docker.io
+    - docker-compose-v2
+  RedHat:
+    - docker
+    - docker-compose-plugin

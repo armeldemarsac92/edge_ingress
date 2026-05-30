@@ -1,0 +1,20 @@
+---
+- name: Phase 5 - configure Warpgate SSH access broker on the edge VPS
+  hosts: edge_vps
+  gather_facts: true
+  become: true
+  roles:
+    - role: vps_warpgate
+      tags: [warpgate]
+    - role: vps_edge_firewall
+      tags: [firewall]
+    - role: vps_edge_proxy
+      tags: [proxy]
+
+- name: Phase 5 - allow Warpgate to SSH to edge nodes
+  hosts: openstack_edge_nodes
+  gather_facts: false
+  become: true
+  roles:
+    - role: openstack_warpgate_access
+      tags: [warpgate, ssh]

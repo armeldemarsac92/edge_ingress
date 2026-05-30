@@ -1,0 +1,6 @@
+---
+warpgate_enabled: false
+warpgate_authorize_client_key: true
+warpgate_authorized_key_state: present
+warpgate_vps_inventory_name: "{{ edge_vps_inventory_name | default(groups['edge_vps'][0]) }}"
+warpgate_target_ssh_user: "{{ ansible_user | default('ansible') }}"
