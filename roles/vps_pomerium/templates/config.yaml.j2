@@ -1,0 +1,37 @@
+# Ansible managed: Pomerium Core config for edge SSH access.
+authenticate_service_url: {{ pomerium_authenticate_service_url | to_json }}
+address: {{ pomerium_http_bind | to_json }}
+insecure_server: {{ pomerium_insecure_server | bool | to_json }}
+
+idp_provider: {{ pomerium_idp_provider | to_json }}
+idp_provider_url: {{ pomerium_idp_provider_url | to_json }}
+idp_client_id: {{ pomerium_idp_client_id | to_json }}
+idp_client_secret_file: {{ "/secrets/idp_client_secret" | to_json }}
+idp_scopes: {{ pomerium_idp_scopes | join(', ') | to_json }}
+
+cookie_secret_file: {{ "/secrets/cookie_secret" | to_json }}
+shared_secret_file: {{ "/secrets/shared_secret" | to_json }}
+signing_key_file: {{ "/secrets/signing_key.pem" | to_json }}
+databroker_storage_connection_string: {{ pomerium_databroker_storage_connection_string | to_json }}
+
+ssh_address: {{ pomerium_ssh_address | to_json }}
+ssh_user_ca_key_file: {{ "/ssh/pomerium_user_ca_key" | to_json }}
+ssh_host_key_files:
+{% for host_key in pomerium_ssh_host_key_files %}
+  - {{ ("/ssh/" ~ (host_key.path | basename)) | to_json }}
+{% endfor %}
+
+runtime_flags:
+  ssh_routes_portal: {{ pomerium_ssh_routes_portal | bool | to_json }}
+  ssh_allow_direct_tcpip: {{ pomerium_ssh_allow_direct_tcpip | bool | to_json }}
+
+{% for route in pomerium_ssh_routes %}
+{% if loop.first %}routes:
+{% endif %}
+  - from: {{ ("ssh://" ~ route.name) | to_json }}
+    to: {{ ("ssh://" ~ route.host ~ ":" ~ (route.port | default(22) | string)) | to_json }}
+    policy:
+{{ route.policy | to_nice_yaml(indent=2, sort_keys=false) | indent(6, true) }}
+{% else %}
+routes: []
+{% endfor %}

@@ -1,11 +1,11 @@
 ---
-- name: Phase 5 - configure Teleport SSH certificate access on the edge VPS
+- name: Phase 5 - configure Pomerium SSH certificate access on the edge VPS
   hosts: edge_vps
   gather_facts: true
   become: true
   roles:
-    - role: vps_teleport
-      tags: [teleport, ssh-access]
+    - role: vps_pomerium
+      tags: [pomerium, ssh-access]
     - role: vps_edge_firewall
       tags: [firewall]
     - role: vps_edge_proxy

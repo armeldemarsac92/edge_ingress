@@ -1,0 +1,17 @@
+#cloud-config
+# Ansible managed: OpenStack VM trust for the Pomerium SSH User CA.
+write_files:
+  - path: {{ pomerium_vm_trusted_ca_path | to_json }}
+    owner: root:root
+    permissions: "0644"
+    content: |
+      {{ pomerium_user_ca_public_key }}
+  - path: {{ pomerium_vm_sshd_config_path | to_json }}
+    owner: root:root
+    permissions: "0644"
+    content: |
+      TrustedUserCAKeys {{ pomerium_vm_trusted_ca_path }}
+
+runcmd:
+  - sshd -t
+  - systemctl restart ssh || systemctl restart sshd

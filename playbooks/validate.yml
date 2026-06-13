@@ -128,26 +128,28 @@
         - edge_security_crowdsec_enabled | default(false) | bool
         - edge_security_crowdsec_prometheus_enabled | default(false) | bool
 
-    - name: Check Teleport service state when enabled
-      ansible.builtin.command: systemctl is-active teleport
+    - name: Check Pomerium service state when enabled
+      ansible.builtin.command: "systemctl is-active {{ pomerium_service_name }}"
       changed_when: false
-      register: edge_validation_teleport_service
-      failed_when: edge_validation_teleport_service.stdout != "active"
-      when: teleport_enabled | default(false) | bool
+      register: edge_validation_pomerium_service
+      failed_when: edge_validation_pomerium_service.stdout != "active"
+      when: pomerium_enabled | default(false) | bool
 
-    - name: Check Teleport status when enabled
-      ansible.builtin.command: tctl status
+    - name: Check Pomerium container state when enabled
+      ansible.builtin.command: "docker compose -f {{ pomerium_compose_path }} ps --status running --services"
       changed_when: false
-      when: teleport_enabled | default(false) | bool
+      register: edge_validation_pomerium_compose
+      failed_when: "'pomerium' not in edge_validation_pomerium_compose.stdout_lines"
+      when: pomerium_enabled | default(false) | bool
 
-    - name: Check Teleport listeners when enabled
+    - name: Check Pomerium listeners when enabled
       ansible.builtin.command: ss -ltn
       changed_when: false
-      register: edge_validation_teleport_listeners
+      register: edge_validation_pomerium_listeners
       failed_when: >
-        edge_validation_teleport_listeners.stdout is not search((teleport_web_listen_addr.split(':')[0] | regex_escape) ~ ':' ~ (teleport_web_listen_addr.split(':')[1] | string))
-        or edge_validation_teleport_listeners.stdout is not search(':' ~ (teleport_proxy_ssh_public_port | string))
-      when: teleport_enabled | default(false) | bool
+        edge_validation_pomerium_listeners.stdout is not search((pomerium_http_bind.split(':')[0] | regex_escape) ~ ':' ~ (pomerium_http_bind.split(':')[1] | string))
+        or edge_validation_pomerium_listeners.stdout is not search(':' ~ (pomerium_ssh_public_port | string))
+      when: pomerium_enabled | default(false) | bool
 
 - name: Validate OpenStack edge node services
   hosts: openstack_edge_nodes

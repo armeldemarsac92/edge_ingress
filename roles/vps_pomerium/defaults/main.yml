@@ -1,0 +1,111 @@
+---
+pomerium_enabled: false
+
+pomerium_image: "{{ lookup('env', 'POMERIUM_IMAGE') | default('pomerium/pomerium', true) }}"
+pomerium_image_tag: "{{ lookup('env', 'POMERIUM_IMAGE_TAG') | default('v0.32.8', true) }}"
+pomerium_compose_project_name: "{{ lookup('env', 'POMERIUM_COMPOSE_PROJECT_NAME') | default('edge-pomerium', true) }}"
+pomerium_service_name: pomerium-compose
+
+pomerium_base_dir: "{{ lookup('env', 'POMERIUM_BASE_DIR') | default('/opt/edge/pomerium', true) }}"
+pomerium_config_path: "{{ pomerium_base_dir }}/config.yaml"
+pomerium_compose_path: "{{ pomerium_base_dir }}/compose.yml"
+pomerium_secrets_dir: "{{ pomerium_base_dir }}/secrets"
+pomerium_data_dir: "{{ pomerium_base_dir }}/data"
+pomerium_ssh_dir: "{{ pomerium_base_dir }}/ssh"
+pomerium_public_dir: "{{ pomerium_base_dir }}/public"
+
+pomerium_domain: "{{ lookup('env', 'POMERIUM_DOMAIN') | default('pomerium.' ~ edge_public_root_domain, true) }}"
+pomerium_authenticate_domain: "{{ lookup('env', 'POMERIUM_AUTHENTICATE_DOMAIN') | default('authenticate.' ~ edge_public_root_domain, true) }}"
+pomerium_authenticate_service_url: "https://{{ pomerium_authenticate_domain }}"
+
+pomerium_http_bind: "{{ lookup('env', 'POMERIUM_HTTP_BIND') | default('127.0.0.1:8443', true) }}"
+pomerium_http_internal_addr: "127.0.0.1:8443"
+pomerium_insecure_server: true
+
+pomerium_ssh_bind_host: "{{ lookup('env', 'POMERIUM_SSH_BIND_HOST') | default('0.0.0.0', true) }}"
+pomerium_ssh_public_port: "{{ lookup('env', 'POMERIUM_SSH_PUBLIC_PORT') | default('2222', true) | int }}"
+pomerium_ssh_address: "{{ pomerium_ssh_bind_host }}:{{ pomerium_ssh_public_port }}"
+pomerium_ssh_routes_portal: "{{ lookup('env', 'POMERIUM_SSH_ROUTES_PORTAL') | default('true', true) | bool }}"
+pomerium_ssh_allow_direct_tcpip: "{{ lookup('env', 'POMERIUM_SSH_ALLOW_DIRECT_TCPIP') | default('false', true) | bool }}"
+
+pomerium_user_ca_key_file: "{{ pomerium_ssh_dir }}/pomerium_user_ca_key"
+pomerium_user_ca_public_key_file: "{{ pomerium_user_ca_key_file }}.pub"
+pomerium_ssh_host_key_files:
+  - path: "{{ pomerium_ssh_dir }}/pomerium_ssh_host_ed25519_key"
+    type: ed25519
+    comment: "Pomerium SSH host ed25519"
+  - path: "{{ pomerium_ssh_dir }}/pomerium_ssh_host_rsa_key"
+    type: rsa
+    bits: 3072
+    comment: "Pomerium SSH host rsa"
+  - path: "{{ pomerium_ssh_dir }}/pomerium_ssh_host_ecdsa_key"
+    type: ecdsa
+    comment: "Pomerium SSH host ecdsa"
+
+pomerium_cookie_secret_file: "{{ pomerium_secrets_dir }}/cookie_secret"
+pomerium_shared_secret_file: "{{ pomerium_secrets_dir }}/shared_secret"
+pomerium_signing_key_file: "{{ pomerium_secrets_dir }}/signing_key.pem"
+pomerium_idp_client_secret_file: "{{ pomerium_secrets_dir }}/idp_client_secret"
+pomerium_databroker_storage_connection_string: "file:///data/pomerium.db"
+
+pomerium_idp_provider: oidc
+pomerium_idp_provider_url: "{{ lookup('env', 'POMERIUM_OIDC_PROVIDER_URL') | default('https://' ~ authentik_domain ~ '/application/o/pomerium/', true) if authentik_domain is defined else '' }}"
+pomerium_idp_client_id: "{{ lookup('env', 'POMERIUM_OIDC_CLIENT_ID') | default('', true) }}"
+pomerium_idp_client_secret: "{{ lookup('env', 'POMERIUM_OIDC_CLIENT_SECRET') | default('', true) }}"
+pomerium_idp_scopes:
+  - openid
+  - email
+  - profile
+  - groups
+  - offline_access
+
+# Feed this from OpenStack discovery/inventory. No VM targets are hardcoded here.
+# Example:
+# pomerium_ssh_routes:
+#   - name: tenant-a-node-1
+#     host: 10.50.0.11
+#     port: 22
+#     policy:
+#       - allow:
+#           and:
+#             - claim/openstack_groups: tenant-a-admin
+#             - ssh_username_matches_claim: allowed_ssh_logins
+pomerium_ssh_routes: []
+
+pomerium_haproxy_enabled: true
+pomerium_haproxy_cert_path: "{{ lookup('env', 'POMERIUM_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ pomerium_authenticate_domain ~ '.pem', true) }}"
+pomerium_haproxy_pem_src: ""
+pomerium_haproxy_cert_src: ""
+pomerium_haproxy_chain_src: ""
+pomerium_haproxy_key_src: ""
+pomerium_haproxy_hostnames: "{{ lookup('env', 'POMERIUM_HAPROXY_HOSTNAMES') | default(pomerium_authenticate_domain, true) | split(',') | map('trim') | list }}"
+pomerium_haproxy_app:
+  name: pomerium
+  hostnames: "{{ pomerium_haproxy_hostnames }}"
+  backend_host: "{{ pomerium_http_bind.split(':')[0] }}"
+  backend_port: "{{ pomerium_http_bind.split(':')[1] | int }}"
+  tls_cert: "{{ pomerium_haproxy_cert_path }}"
+  hsts: true
+pomerium_haproxy_cert_bundle:
+  name: "{{ pomerium_authenticate_domain }}"
+  pem_src: "{{ pomerium_haproxy_pem_src }}"
+  cert_src: "{{ pomerium_haproxy_cert_src }}"
+  chain_src: "{{ pomerium_haproxy_chain_src }}"
+  key_src: "{{ pomerium_haproxy_key_src }}"
+  dest: "{{ pomerium_haproxy_cert_path }}"
+
+pomerium_vm_trust_snippet_path: "{{ pomerium_public_dir }}/cloud-init-trust-pomerium-ssh-ca.yaml"
+pomerium_vm_trusted_ca_path: /etc/ssh/trusted_user_ca_keys/pomerium_user_ca.pub
+pomerium_vm_sshd_config_path: /etc/ssh/sshd_config.d/50-pomerium-user-ca.conf
+
+pomerium_docker_packages:
+  Debian:
+    - docker.io
+    - docker-compose-plugin
+    - openssh-client
+    - openssl
+  RedHat:
+    - docker
+    - docker-compose-plugin
+    - openssh-clients
+    - openssl

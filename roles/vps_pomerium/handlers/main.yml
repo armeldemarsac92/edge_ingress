@@ -1,0 +1,11 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Restart Pomerium stack
+  ansible.builtin.systemd:
+    name: "{{ pomerium_service_name }}"
+    state: restarted
+  when: not ansible_check_mode

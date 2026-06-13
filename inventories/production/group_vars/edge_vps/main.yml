@@ -31,7 +31,7 @@ edge_proxy_haproxy_local_tls_routes:
 edge_proxy_haproxy_cert_bundles: >-
   {{
     ([authentik_haproxy_cert_bundle] if (authentik_haproxy_pem_src | length > 0 or (authentik_haproxy_cert_src | length > 0 and authentik_haproxy_key_src | length > 0)) else [])
-    + ([teleport_haproxy_cert_bundle] if (teleport_haproxy_pem_src | length > 0 or (teleport_haproxy_cert_src | length > 0 and teleport_haproxy_key_src | length > 0)) else [])
+    + ([pomerium_haproxy_cert_bundle] if (pomerium_haproxy_pem_src | length > 0 or (pomerium_haproxy_cert_src | length > 0 and pomerium_haproxy_key_src | length > 0)) else [])
   }}
 
 edge_security_enabled: true
@@ -80,32 +80,27 @@ authentik_haproxy_cert_bundle:
   key_src: "{{ authentik_haproxy_key_src }}"
   dest: "{{ authentik_haproxy_cert_path }}"
 
-teleport_enabled: true
-teleport_domain: "{{ lookup('env', 'TELEPORT_DOMAIN') | default('teleport.' ~ edge_public_root_domain, true) }}"
-teleport_cluster_name: "{{ lookup('env', 'TELEPORT_CLUSTER_NAME') | default(teleport_domain, true) }}"
-teleport_base_dir: "{{ lookup('env', 'TELEPORT_BASE_DIR') | default('/opt/edge/teleport', true) }}"
-teleport_version: "{{ lookup('env', 'TELEPORT_VERSION') | default('18.8.3', true) }}"
-teleport_edition: "{{ lookup('env', 'TELEPORT_EDITION') | default('oss', true) }}"
-teleport_proxy_ssh_public_port: "{{ lookup('env', 'TELEPORT_SSH_PUBLIC_PORT') | default('3023', true) | int }}"
-teleport_haproxy_enabled: true
-teleport_haproxy_cert_path: "{{ lookup('env', 'TELEPORT_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ teleport_domain ~ '.pem', true) }}"
-teleport_haproxy_pem_src: ""
-teleport_haproxy_cert_src: ""
-teleport_haproxy_chain_src: ""
-teleport_haproxy_key_src: ""
-teleport_haproxy_cert_bundle:
-  name: "{{ teleport_domain }}"
-  pem_src: "{{ teleport_haproxy_pem_src }}"
-  cert_src: "{{ teleport_haproxy_cert_src }}"
-  chain_src: "{{ teleport_haproxy_chain_src }}"
-  key_src: "{{ teleport_haproxy_key_src }}"
-  dest: "{{ teleport_haproxy_cert_path }}"
-teleport_authentik_oidc_client_id: "{{ lookup('env', 'TELEPORT_OIDC_CLIENT_ID') | default('', true) }}"
-teleport_authentik_oidc_client_secret: "{{ lookup('env', 'TELEPORT_OIDC_CLIENT_SECRET') | default('', true) }}"
-teleport_authentik_oidc_issuer_url: "{{ lookup('env', 'TELEPORT_OIDC_ISSUER_URL') | default('https://' ~ authentik_domain ~ '/application/o/teleport/', true) }}"
-teleport_default_logins: "{{ lookup('env', 'TELEPORT_DEFAULT_LOGINS') | default(edge_vps_ssh_user, true) | split(',') | map('trim') | list }}"
-teleport_oidc_claims_to_roles:
-  - claim: groups
-    value: "{{ lookup('env', 'TELEPORT_ADMIN_GROUP') | default('teleport-admins', true) }}"
-    roles:
-      - edge-admin
+pomerium_enabled: true
+pomerium_domain: "{{ lookup('env', 'POMERIUM_DOMAIN') | default('pomerium.' ~ edge_public_root_domain, true) }}"
+pomerium_authenticate_domain: "{{ lookup('env', 'POMERIUM_AUTHENTICATE_DOMAIN') | default('authenticate.' ~ edge_public_root_domain, true) }}"
+pomerium_base_dir: "{{ lookup('env', 'POMERIUM_BASE_DIR') | default('/opt/edge/pomerium', true) }}"
+pomerium_image_tag: "{{ lookup('env', 'POMERIUM_IMAGE_TAG') | default('v0.32.8', true) }}"
+pomerium_ssh_public_port: "{{ lookup('env', 'POMERIUM_SSH_PUBLIC_PORT') | default('2222', true) | int }}"
+pomerium_haproxy_enabled: true
+pomerium_haproxy_hostnames: "{{ lookup('env', 'POMERIUM_HAPROXY_HOSTNAMES') | default(pomerium_authenticate_domain, true) | split(',') | map('trim') | list }}"
+pomerium_haproxy_cert_path: "{{ lookup('env', 'POMERIUM_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ pomerium_authenticate_domain ~ '.pem', true) }}"
+pomerium_haproxy_pem_src: ""
+pomerium_haproxy_cert_src: ""
+pomerium_haproxy_chain_src: ""
+pomerium_haproxy_key_src: ""
+pomerium_haproxy_cert_bundle:
+  name: "{{ pomerium_authenticate_domain }}"
+  pem_src: "{{ pomerium_haproxy_pem_src }}"
+  cert_src: "{{ pomerium_haproxy_cert_src }}"
+  chain_src: "{{ pomerium_haproxy_chain_src }}"
+  key_src: "{{ pomerium_haproxy_key_src }}"
+  dest: "{{ pomerium_haproxy_cert_path }}"
+pomerium_idp_provider_url: "{{ lookup('env', 'POMERIUM_OIDC_PROVIDER_URL') | default('https://' ~ authentik_domain ~ '/application/o/pomerium/', true) }}"
+pomerium_idp_client_id: "{{ lookup('env', 'POMERIUM_OIDC_CLIENT_ID') | default('', true) }}"
+pomerium_idp_client_secret: "{{ lookup('env', 'POMERIUM_OIDC_CLIENT_SECRET') | default('', true) }}"
+pomerium_ssh_routes: []

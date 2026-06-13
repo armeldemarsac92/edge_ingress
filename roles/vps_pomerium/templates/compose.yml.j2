@@ -1,0 +1,13 @@
+---
+name: {{ pomerium_compose_project_name }}
+
+services:
+  pomerium:
+    image: {{ pomerium_image }}:{{ pomerium_image_tag }}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./config.yaml:/pomerium/config.yaml:ro
+      - ./data:/data
+      - ./secrets:/secrets:ro
+      - ./ssh:/ssh:ro

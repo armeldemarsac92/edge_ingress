@@ -10,12 +10,12 @@ In scope:
 - Authentik on `auth.example.net`.
 - GitHub as an external OAuth source.
 - Authentik-managed local users, groups, policies, and service access.
-- Teleport OIDC integration.
+- Pomerium OIDC integration for SSH certificate access.
 - Future OpenStack Keystone/Horizon federation strategy.
 
 Out of scope for this phase:
 
-- Future service integrations beyond Teleport and OpenStack.
+- Future service integrations beyond Pomerium and OpenStack.
 - Running a second public reverse proxy such as Caddy, Traefik, or NGINX.
 - Open registration.
 
@@ -218,48 +218,50 @@ Example groups:
 
 ```text
 edge-admins
-teleport-users
-teleport-admins
+pomerium-users
+pomerium-admins
 tenant-alice
 tenant-bob
 ```
 
-## Teleport OIDC
+## Pomerium OIDC
 
-Create an Authentik OAuth2/OpenID Connect provider for Teleport:
+Create an Authentik OAuth2/OpenID Connect provider for Pomerium:
 
 ```text
-Application: Teleport
+Application: Pomerium
 Provider type: OAuth2/OpenID Connect
 Client type: Confidential
-Redirect URI: https://teleport.example.net/v1/webapi/oidc/callback
-Issuer URL: https://auth.example.net/application/o/teleport/
-Scopes: openid, email, profile, groups
+Redirect URI: https://authenticate.example.net/oauth2/callback
+Issuer URL: https://auth.example.net/application/o/pomerium/
+Scopes: openid, email, profile, groups, offline_access
 ```
 
 Bind an authorization policy that only allows:
 
 ```text
-teleport-users
-teleport-admins
+pomerium-users
+pomerium-admins
 edge-admins
 ```
 
-Teleport maps the Authentik `groups` claim to Teleport roles through the
-`oidc` connector managed by `roles/vps_teleport`.
+Pomerium Core can match arbitrary OIDC claims in SSH route policy. For
+multi-tenant OpenStack access, prefer explicit Authentik property mappings such
+as `openstack_groups` and `allowed_ssh_logins` instead of depending on
+Enterprise-only group-directory policy criteria.
 
 Recommended access model:
 
 ```text
 tenant-alice
     -> Alice OpenStack project
-    -> Alice VMs through Teleport-issued OpenSSH certificates
-    -> Alice Kubernetes resources through future Teleport or OpenStack policy
+    -> Alice VMs through Pomerium-issued OpenSSH certificates
+    -> Alice Kubernetes resources through future Pomerium or OpenStack policy
 
 tenant-bob
     -> Bob OpenStack project
-    -> Bob VMs through Teleport-issued OpenSSH certificates
-    -> Bob Kubernetes resources through future Teleport or OpenStack policy
+    -> Bob VMs through Pomerium-issued OpenSSH certificates
+    -> Bob Kubernetes resources through future Pomerium or OpenStack policy
 ```
 
 ## OpenStack Federation Strategy
@@ -374,7 +376,7 @@ Monitor:
 - failed login spikes;
 - invitation creation/use;
 - GitHub OAuth callback errors;
-- OIDC provider errors for Teleport;
+- OIDC provider errors for Pomerium;
 - PostgreSQL disk usage;
 - backup job success;
 - HAProxy reload failures;
@@ -395,7 +397,7 @@ Still required before public cutover:
 - Provide `/etc/haproxy/certs/auth.example.net.pem`.
 - Set `authentik_haproxy_enabled: true`.
 - Create the GitHub OAuth App.
-- Configure the GitHub source, invitation flow, groups, policies, and Teleport
+- Configure the GitHub source, invitation flow, groups, policies, and Pomerium
   OIDC provider in Authentik.
 
 ## References

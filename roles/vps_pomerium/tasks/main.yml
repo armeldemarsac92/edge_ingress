@@ -1,0 +1,265 @@
+---
+- name: Skip Pomerium when disabled
+  ansible.builtin.debug:
+    msg: "pomerium_enabled is false; skipping Pomerium deployment."
+  when: not pomerium_enabled | bool
+
+- name: Configure Pomerium
+  when: pomerium_enabled | bool
+  block:
+    - name: Validate Pomerium inputs
+      ansible.builtin.assert:
+        that:
+          - pomerium_domain is match('^[A-Za-z0-9_.-]+$')
+          - pomerium_authenticate_domain is match('^[A-Za-z0-9_.-]+$')
+          - pomerium_authenticate_domain != pomerium_domain
+          - pomerium_haproxy_hostnames is sequence
+          - pomerium_haproxy_hostnames | length > 0
+          - pomerium_base_dir is match('^/')
+          - pomerium_http_bind is match('^[0-9.]+:[0-9]+$')
+          - pomerium_ssh_bind_host is match('^[0-9.]+$')
+          - pomerium_ssh_public_port | int > 0
+          - pomerium_ssh_public_port | int <= 65535
+          - pomerium_idp_provider == 'oidc'
+          - pomerium_idp_provider_url is match('^https://')
+          - pomerium_idp_client_id | length > 0
+          - pomerium_idp_client_secret | length > 0
+        fail_msg: "Invalid Pomerium inventory variables or missing OIDC client credentials."
+        quiet: true
+      no_log: true
+
+    - name: Validate Pomerium SSH routes
+      ansible.builtin.assert:
+        that:
+          - item.name is match('^[A-Za-z0-9_.-]+$')
+          - item.host is match('^[A-Za-z0-9_.:-]+$')
+          - item.port | default(22) | int > 0
+          - item.port | default(22) | int <= 65535
+          - item.policy is defined
+          - item.policy is sequence
+          - item.policy | length > 0
+        fail_msg: "Invalid pomerium_ssh_routes entry: {{ item.name | default('unnamed') }}"
+        quiet: true
+      loop: "{{ pomerium_ssh_routes }}"
+      loop_control:
+        label: "{{ item.name | default('ssh-route') }}"
+
+    - name: Refresh apt cache before Pomerium prerequisites
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install Pomerium prerequisites
+      ansible.builtin.package:
+        name: "{{ pomerium_docker_packages[ansible_os_family] | default(pomerium_docker_packages.Debian) }}"
+        state: present
+
+    - name: Enable and start Docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+      when: not ansible_check_mode
+
+    - name: Create Pomerium directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode | default('0755') }}"
+      loop:
+        - path: "{{ pomerium_base_dir }}"
+          mode: "0750"
+        - path: "{{ pomerium_data_dir }}"
+          mode: "0750"
+        - path: "{{ pomerium_public_dir }}"
+          mode: "0755"
+        - path: "{{ pomerium_secrets_dir }}"
+          mode: "0750"
+        - path: "{{ pomerium_ssh_dir }}"
+          mode: "0750"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Check generated Pomerium secret files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: pomerium_secret_stats
+      loop:
+        - "{{ pomerium_cookie_secret_file }}"
+        - "{{ pomerium_shared_secret_file }}"
+      no_log: true
+
+    - name: Generate missing Pomerium shared secrets
+      ansible.builtin.command: openssl rand -base64 32
+      register: pomerium_generated_secret
+      changed_when: true
+      loop: "{{ pomerium_secret_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+      no_log: true
+      when:
+        - not ansible_check_mode
+        - not item.stat.exists
+
+    - name: Write generated Pomerium shared secrets
+      ansible.builtin.copy:
+        content: "{{ item.stdout }}\n"
+        dest: "{{ item.item.item }}"
+        owner: root
+        group: root
+        mode: "0600"
+        force: false
+      loop: "{{ pomerium_generated_secret.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.item }}"
+      no_log: true
+      when:
+        - not ansible_check_mode
+        - not (item.skipped | default(false))
+
+    - name: Render Pomerium OIDC client secret
+      ansible.builtin.copy:
+        content: "{{ pomerium_idp_client_secret }}\n"
+        dest: "{{ pomerium_idp_client_secret_file }}"
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Restart Pomerium stack
+      no_log: true
+
+    - name: Generate Pomerium JWT signing key
+      ansible.builtin.command:
+        cmd: "openssl ecparam -genkey -name prime256v1 -noout -out {{ pomerium_signing_key_file }}"
+        creates: "{{ pomerium_signing_key_file }}"
+      when: not ansible_check_mode
+
+    - name: Secure Pomerium JWT signing key
+      ansible.builtin.file:
+        path: "{{ pomerium_signing_key_file }}"
+        owner: root
+        group: root
+        mode: "0600"
+      when: not ansible_check_mode
+
+    - name: Generate Pomerium SSH user CA key
+      ansible.builtin.command:
+        cmd: "ssh-keygen -N '' -t ed25519 -f {{ pomerium_user_ca_key_file }} -C 'Pomerium User CA'"
+        creates: "{{ pomerium_user_ca_key_file }}"
+      when: not ansible_check_mode
+
+    - name: Generate Pomerium SSH host keys
+      ansible.builtin.command:
+        cmd: >-
+          ssh-keygen -N '' -t {{ item.type }}
+          {% if item.bits is defined %}-b {{ item.bits }}{% endif %}
+          -f {{ item.path }} -C {{ item.comment | quote }}
+        creates: "{{ item.path }}"
+      loop: "{{ pomerium_ssh_host_key_files }}"
+      loop_control:
+        label: "{{ item.path }}"
+      when: not ansible_check_mode
+
+    - name: Secure Pomerium SSH private keys
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ [pomerium_user_ca_key_file] + (pomerium_ssh_host_key_files | map(attribute='path') | list) }}"
+      loop_control:
+        label: "{{ item }}"
+      when: not ansible_check_mode
+
+    - name: Publish Pomerium SSH public keys locally
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ [pomerium_user_ca_public_key_file] + (pomerium_ssh_host_key_files | map(attribute='path') | map('regex_replace', '$', '.pub') | list) }}"
+      loop_control:
+        label: "{{ item }}"
+      when: not ansible_check_mode
+
+    - name: Render Pomerium config
+      ansible.builtin.template:
+        src: config.yaml.j2
+        dest: "{{ pomerium_config_path }}"
+        owner: root
+        group: root
+        mode: "0640"
+      notify: Restart Pomerium stack
+
+    - name: Render Pomerium Compose file
+      ansible.builtin.template:
+        src: compose.yml.j2
+        dest: "{{ pomerium_compose_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Pomerium stack
+
+    - name: Render Pomerium Compose systemd unit
+      ansible.builtin.template:
+        src: pomerium-compose.service.j2
+        dest: "/etc/systemd/system/{{ pomerium_service_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart Pomerium stack
+
+    - name: Read Pomerium SSH user CA public key
+      ansible.builtin.slurp:
+        src: "{{ pomerium_user_ca_public_key_file }}"
+      register: pomerium_user_ca_public_key_slurp
+      when: not ansible_check_mode
+
+    - name: Render OpenStack VM cloud-init trust snippet
+      ansible.builtin.template:
+        src: cloud-init-trust-user-ca.yaml.j2
+        dest: "{{ pomerium_vm_trust_snippet_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        pomerium_user_ca_public_key: "{{ pomerium_user_ca_public_key_slurp.content | b64decode | trim }}"
+      when: not ansible_check_mode
+
+    - name: Flush Pomerium handlers before service start
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start Pomerium stack
+      ansible.builtin.systemd:
+        name: "{{ pomerium_service_name }}"
+        enabled: true
+        state: started
+      when: not ansible_check_mode
+
+    - name: Wait for Pomerium HTTP listener
+      ansible.builtin.wait_for:
+        host: "{{ pomerium_http_bind.split(':')[0] }}"
+        port: "{{ pomerium_http_bind.split(':')[1] | int }}"
+        timeout: 60
+      when: not ansible_check_mode
+
+    - name: Add Pomerium local HTTP app route for HAProxy
+      ansible.builtin.set_fact:
+        edge_local_http_apps: "{{ (edge_local_http_apps | default([])) + [pomerium_haproxy_app] }}"
+      when: pomerium_haproxy_enabled | bool
+
+    - name: Add Pomerium HAProxy certificate bundle when sources are configured
+      ansible.builtin.set_fact:
+        edge_proxy_haproxy_cert_bundles: "{{ (edge_proxy_haproxy_cert_bundles | default([])) + [pomerium_haproxy_cert_bundle] }}"
+      when:
+        - pomerium_haproxy_enabled | bool
+        - (pomerium_haproxy_pem_src | length > 0) or ((pomerium_haproxy_cert_src | length > 0) and (pomerium_haproxy_key_src | length > 0))
+        - pomerium_haproxy_cert_path not in (edge_proxy_haproxy_cert_bundles | default([]) | map(attribute='dest') | list)
+
+    - name: Add Pomerium SSH proxy port to firewall extras
+      ansible.builtin.set_fact:
+        edge_firewall_public_tcp_ports_extra: "{{ ((edge_firewall_public_tcp_ports_extra | default([])) + [pomerium_ssh_public_port | int]) | unique | list }}"

@@ -224,7 +224,7 @@ playbooks/
   phase2-routing.yml
   phase3-public-edge.yml
   phase4-authentik.yml
-  phase5-teleport.yml
+  phase5-pomerium.yml
   site.yml
   validate.yml
   validate-authentik.yml
@@ -238,10 +238,10 @@ roles/
   vps_edge_proxy/
   vps_edge_firewall/
   vps_authentik/
-  vps_teleport/
+  vps_pomerium/
 docs/
   authentik-identity-broker.md
-  teleport-ssh-access.md
+  pomerium-ssh-access.md
   operator-checklist.md
 ```
 
@@ -288,7 +288,7 @@ SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase1-wire
 SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase2-routing.yml
 SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase3-public-edge.yml
 SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase4-authentik.yml
-SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase5-teleport.yml
+SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase5-pomerium.yml
 ```
 
 Or apply the full site:
@@ -349,14 +349,15 @@ VPS-specific options live in
 | `authentik_domain` | `auth.example.net` | Public Authentik hostname. |
 | `authentik_image_tag` | `2026.5` | Authentik server/worker image tag, override with `AUTHENTIK_IMAGE_TAG`. |
 | `authentik_haproxy_enabled` | `true` | Enables HAProxy TLS termination for Authentik after a real cert is present. |
-| `teleport_enabled` | `true` | Deploys Teleport auth/proxy services on the edge VPS. |
-| `teleport_domain` | `teleport.example.net` | Public Teleport web/proxy hostname. |
-| `teleport_proxy_ssh_public_port` | `3023` | Public Teleport SSH proxy entry point. |
+| `pomerium_enabled` | `true` | Deploys Pomerium Core native SSH access on the edge VPS. |
+| `pomerium_authenticate_domain` | `authenticate.example.net` | Public Pomerium authenticate service hostname. |
+| `pomerium_ssh_public_port` | `2222` | Public Pomerium native SSH proxy entry point. |
+| `pomerium_ssh_routes` | `[]` | Dynamic OpenStack SSH target route list. |
 
 The Authentik identity broker plan and runbook live in
 `docs/authentik-identity-broker.md`.
 
-The Teleport SSH certificate access runbook lives in `docs/teleport-ssh-access.md`.
+The Pomerium SSH certificate access runbook lives in `docs/pomerium-ssh-access.md`.
 
 OpenStack-node options live in
 `inventories/production/group_vars/openstack_edge_nodes/main.yml`.
@@ -426,7 +427,7 @@ Rollback entry points:
 
 ```bash
 systemctl stop haproxy
-systemctl stop teleport
+systemctl stop pomerium-compose
 systemctl stop wg-quick@wg-os1 wg-quick@wg-os2 wg-quick@wg-os3
 systemctl stop wg-quick@wg-vps
 systemctl stop vps-edge-gateway-nftables
