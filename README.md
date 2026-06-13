@@ -35,8 +35,8 @@ Deployed defaults:
 - Private DNS forwarding zone: `apps.example.net`
 - VPS firewall role: enabled in production with `edge_firewall_backend: ufw`
 - VPS security role: CrowdSec, HAProxy SPOA bouncer, firewall bouncer, and Fail2ban
-- Prometheus scrape endpoints: node exporter on WireGuard-side addresses and
-  CrowdSec metrics on the VPS WireGuard loopback address
+- Prometheus scrape endpoints: node exporter and CrowdSec metrics on the VPS
+  WireGuard loopback address
 - Generic TCP forwards: none by default with `edge_tcp_forwards: []`
 - Minecraft routing: not enabled with `edge_minecraft_enabled: false`
 
@@ -395,7 +395,6 @@ nft list table inet vps_edge_gateway
 nft list table ip vps_edge_gateway_nat
 vtysh -c 'show bgp summary'
 vtysh -c 'show bfd peers'
-ss -ltnp | grep ':9100'
 ```
 
 ## Metrics
@@ -403,10 +402,8 @@ ss -ltnp | grep ':9100'
 This repository exposes Prometheus scrape endpoints but does not deploy a
 Prometheus server.
 
-- `edge_prometheus_exporters` installs node exporter on the VPS and OpenStack
-  edge nodes.
-- Node exporter binds to `edge_vps_loopback_addr` on the VPS and to each node's
-  `wireguard_links.<node>.node_addr` on OpenStack nodes.
+- `edge_prometheus_exporters` installs node exporter on the VPS edge host only.
+- Node exporter binds to `edge_vps_loopback_addr` on the VPS.
 - CrowdSec's native Prometheus endpoint binds to `edge_vps_loopback_addr` on the
   VPS.
 - The VPS firewall allows the metrics ports only from

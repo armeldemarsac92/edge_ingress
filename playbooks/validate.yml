@@ -200,12 +200,3 @@
       register: edge_validation_node_bgp_summary
       failed_when: edge_validation_node_bgp_summary.stdout is not search(wireguard_links[edge_validation_node_name].vps_addr.split('/')[0] | regex_escape)
       when: edge_routing_mode == "frr"
-
-    - name: Check node exporter listener on OpenStack node when enabled
-      ansible.builtin.command: ss -ltn
-      changed_when: false
-      register: edge_validation_node_exporter_listener
-      failed_when: edge_validation_node_exporter_listener.stdout is not search((wireguard_links[edge_validation_node_name].node_addr.split('/')[0] | regex_escape) ~ ':' ~ (edge_metrics_node_exporter_port | string))
-      when:
-        - edge_metrics_enabled | default(false) | bool
-        - edge_metrics_node_exporter_enabled | default(true) | bool

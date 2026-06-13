@@ -8,6 +8,12 @@
   roles:
     - role: edge_wireguard
       tags: [wireguard]
+
+- name: Phase 1 - configure VPS Prometheus exporters
+  hosts: edge_vps
+  gather_facts: true
+  become: true
+  roles:
     - role: edge_prometheus_exporters
       tags: [metrics, prometheus, node-exporter]
 
