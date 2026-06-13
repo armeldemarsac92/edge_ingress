@@ -106,7 +106,7 @@
 
     - name: Write generated Pomerium shared secrets
       ansible.builtin.copy:
-        content: "{{ item.stdout }}\n"
+        content: "{{ item.stdout }}"
         dest: "{{ item.item.item }}"
         owner: root
         group: root
@@ -120,9 +120,33 @@
         - not ansible_check_mode
         - not (item.skipped | default(false))
 
+    - name: Read Pomerium shared secret files
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      register: pomerium_shared_secret_file_contents
+      loop:
+        - "{{ pomerium_cookie_secret_file }}"
+        - "{{ pomerium_shared_secret_file }}"
+      no_log: true
+      when: not ansible_check_mode
+
+    - name: Normalize Pomerium shared secret files
+      ansible.builtin.copy:
+        content: "{{ item.content | b64decode | trim }}"
+        dest: "{{ item.source }}"
+        owner: root
+        group: root
+        mode: "0600"
+      loop: "{{ pomerium_shared_secret_file_contents.results | default([]) }}"
+      loop_control:
+        label: "{{ item.source }}"
+      notify: Restart Pomerium stack
+      no_log: true
+      when: not ansible_check_mode
+
     - name: Render Pomerium OIDC client secret
       ansible.builtin.copy:
-        content: "{{ pomerium_idp_client_secret }}\n"
+        content: "{{ pomerium_idp_client_secret }}"
         dest: "{{ pomerium_idp_client_secret_file }}"
         owner: root
         group: root
