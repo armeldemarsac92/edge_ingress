@@ -28,7 +28,11 @@ edge_proxy_haproxy_local_tls_routes:
     tls_cert: "{{ edge_control_plane_tls_cert_path }}"
     hsts: true
     redirect_http: false
-edge_proxy_haproxy_cert_bundles: "{{ [authentik_haproxy_cert_bundle] if (authentik_haproxy_pem_src | length > 0 or (authentik_haproxy_cert_src | length > 0 and authentik_haproxy_key_src | length > 0)) else [] }}"
+edge_proxy_haproxy_cert_bundles: >-
+  {{
+    ([authentik_haproxy_cert_bundle] if (authentik_haproxy_pem_src | length > 0 or (authentik_haproxy_cert_src | length > 0 and authentik_haproxy_key_src | length > 0)) else [])
+    + ([teleport_haproxy_cert_bundle] if (teleport_haproxy_pem_src | length > 0 or (teleport_haproxy_cert_src | length > 0 and teleport_haproxy_key_src | length > 0)) else [])
+  }}
 
 edge_security_enabled: true
 edge_security_crowdsec_enabled: true
@@ -76,17 +80,32 @@ authentik_haproxy_cert_bundle:
   key_src: "{{ authentik_haproxy_key_src }}"
   dest: "{{ authentik_haproxy_cert_path }}"
 
-warpgate_enabled: true
-warpgate_domain: "{{ lookup('env', 'WARPGATE_DOMAIN') | default('warpgate.' ~ edge_public_root_domain, true) }}"
-warpgate_external_host: "{{ warpgate_domain }}"
-warpgate_base_dir: "{{ lookup('env', 'WARPGATE_BASE_DIR') | default('/opt/edge/warpgate', true) }}"
-warpgate_http_bind_host: 127.0.0.1
-warpgate_http_port: "{{ lookup('env', 'WARPGATE_HTTP_PORT') | default('8888', true) | int }}"
-warpgate_ssh_public_port: "{{ lookup('env', 'WARPGATE_SSH_PUBLIC_PORT') | default('2222', true) | int }}"
-warpgate_ssh_container_port: 2222
-warpgate_haproxy_enabled: true
-warpgate_haproxy_cert_path: "{{ lookup('env', 'WARPGATE_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ warpgate_domain ~ '.pem', true) }}"
-warpgate_authentik_oidc_client_id: "{{ lookup('env', 'WARPGATE_OIDC_CLIENT_ID') | default('', true) }}"
-warpgate_authentik_oidc_client_secret: "{{ lookup('env', 'WARPGATE_OIDC_CLIENT_SECRET') | default('', true) }}"
-warpgate_sso_enabled: "{{ warpgate_authentik_oidc_client_id | length > 0 and warpgate_authentik_oidc_client_secret | length > 0 }}"
-warpgate_manage_targets: true
+teleport_enabled: true
+teleport_domain: "{{ lookup('env', 'TELEPORT_DOMAIN') | default('teleport.' ~ edge_public_root_domain, true) }}"
+teleport_cluster_name: "{{ lookup('env', 'TELEPORT_CLUSTER_NAME') | default(teleport_domain, true) }}"
+teleport_base_dir: "{{ lookup('env', 'TELEPORT_BASE_DIR') | default('/opt/edge/teleport', true) }}"
+teleport_version: "{{ lookup('env', 'TELEPORT_VERSION') | default('18.8.3', true) }}"
+teleport_edition: "{{ lookup('env', 'TELEPORT_EDITION') | default('oss', true) }}"
+teleport_proxy_ssh_public_port: "{{ lookup('env', 'TELEPORT_SSH_PUBLIC_PORT') | default('3023', true) | int }}"
+teleport_haproxy_enabled: true
+teleport_haproxy_cert_path: "{{ lookup('env', 'TELEPORT_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ teleport_domain ~ '.pem', true) }}"
+teleport_haproxy_pem_src: ""
+teleport_haproxy_cert_src: ""
+teleport_haproxy_chain_src: ""
+teleport_haproxy_key_src: ""
+teleport_haproxy_cert_bundle:
+  name: "{{ teleport_domain }}"
+  pem_src: "{{ teleport_haproxy_pem_src }}"
+  cert_src: "{{ teleport_haproxy_cert_src }}"
+  chain_src: "{{ teleport_haproxy_chain_src }}"
+  key_src: "{{ teleport_haproxy_key_src }}"
+  dest: "{{ teleport_haproxy_cert_path }}"
+teleport_authentik_oidc_client_id: "{{ lookup('env', 'TELEPORT_OIDC_CLIENT_ID') | default('', true) }}"
+teleport_authentik_oidc_client_secret: "{{ lookup('env', 'TELEPORT_OIDC_CLIENT_SECRET') | default('', true) }}"
+teleport_authentik_oidc_issuer_url: "{{ lookup('env', 'TELEPORT_OIDC_ISSUER_URL') | default('https://' ~ authentik_domain ~ '/application/o/teleport/', true) }}"
+teleport_default_logins: "{{ lookup('env', 'TELEPORT_DEFAULT_LOGINS') | default(edge_vps_ssh_user, true) | split(',') | map('trim') | list }}"
+teleport_oidc_claims_to_roles:
+  - claim: groups
+    value: "{{ lookup('env', 'TELEPORT_ADMIN_GROUP') | default('teleport-admins', true) }}"
+    roles:
+      - edge-admin

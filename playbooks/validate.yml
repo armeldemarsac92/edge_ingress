@@ -128,26 +128,26 @@
         - edge_security_crowdsec_enabled | default(false) | bool
         - edge_security_crowdsec_prometheus_enabled | default(false) | bool
 
-    - name: Check Warpgate service state when enabled
-      ansible.builtin.command: systemctl is-active warpgate-compose
+    - name: Check Teleport service state when enabled
+      ansible.builtin.command: systemctl is-active teleport
       changed_when: false
-      register: edge_validation_warpgate_service
-      failed_when: edge_validation_warpgate_service.stdout != "active"
-      when: warpgate_enabled | default(false) | bool
+      register: edge_validation_teleport_service
+      failed_when: edge_validation_teleport_service.stdout != "active"
+      when: teleport_enabled | default(false) | bool
 
-    - name: Check Warpgate config when enabled
-      ansible.builtin.command: docker compose -f {{ warpgate_base_dir }}/compose.yml exec -T warpgate warpgate --config /data/warpgate.yaml check
+    - name: Check Teleport status when enabled
+      ansible.builtin.command: tctl status
       changed_when: false
-      when: warpgate_enabled | default(false) | bool
+      when: teleport_enabled | default(false) | bool
 
-    - name: Check Warpgate SSH listener when enabled
+    - name: Check Teleport listeners when enabled
       ansible.builtin.command: ss -ltn
       changed_when: false
-      register: edge_validation_warpgate_listeners
-      failed_when: edge_validation_warpgate_listeners.stdout is not search(':' ~ (warpgate_ssh_public_port | string))
-      when:
-        - warpgate_enabled | default(false) | bool
-        - warpgate_ssh_enabled | default(true) | bool
+      register: edge_validation_teleport_listeners
+      failed_when: >
+        edge_validation_teleport_listeners.stdout is not search((teleport_web_listen_addr.split(':')[0] | regex_escape) ~ ':' ~ (teleport_web_listen_addr.split(':')[1] | string))
+        or edge_validation_teleport_listeners.stdout is not search(':' ~ (teleport_proxy_ssh_public_port | string))
+      when: teleport_enabled | default(false) | bool
 
 - name: Validate OpenStack edge node services
   hosts: openstack_edge_nodes

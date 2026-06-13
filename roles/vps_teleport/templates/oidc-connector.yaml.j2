@@ -1,0 +1,26 @@
+kind: oidc
+version: v3
+metadata:
+  name: {{ teleport_oidc_connector_name | to_json }}
+spec:
+  display: {{ teleport_oidc_display | to_json }}
+  issuer_url: {{ teleport_authentik_oidc_issuer_url | to_json }}
+  client_id: {{ teleport_authentik_oidc_client_id | to_json }}
+  client_secret: {{ teleport_authentik_oidc_client_secret | to_json }}
+  redirect_url:
+{% for redirect_url in teleport_oidc_redirect_urls %}
+    - {{ redirect_url | to_json }}
+{% endfor %}
+  scope:
+{% for scope in teleport_oidc_scope %}
+    - {{ scope | to_json }}
+{% endfor %}
+  claims_to_roles:
+{% for mapping in teleport_oidc_claims_to_roles %}
+    - claim: {{ mapping.claim | to_json }}
+      value: {{ mapping.value | to_json }}
+      roles:
+{% for role in mapping.roles %}
+        - {{ role | to_json }}
+{% endfor %}
+{% endfor %}

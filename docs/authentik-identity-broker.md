@@ -10,12 +10,12 @@ In scope:
 - Authentik on `auth.example.net`.
 - GitHub as an external OAuth source.
 - Authentik-managed local users, groups, policies, and service access.
-- Warpgate OIDC integration.
+- Teleport OIDC integration.
 - Future OpenStack Keystone/Horizon federation strategy.
 
 Out of scope for this phase:
 
-- Future service integrations beyond Warpgate and OpenStack.
+- Future service integrations beyond Teleport and OpenStack.
 - Running a second public reverse proxy such as Caddy, Traefik, or NGINX.
 - Open registration.
 
@@ -218,49 +218,48 @@ Example groups:
 
 ```text
 edge-admins
-warpgate-users
-warpgate-admins
+teleport-users
+teleport-admins
 tenant-alice
 tenant-bob
 ```
 
-## Warpgate OIDC
+## Teleport OIDC
 
-Create an Authentik OAuth2/OpenID Connect provider for Warpgate:
+Create an Authentik OAuth2/OpenID Connect provider for Teleport:
 
 ```text
-Application: Warpgate
+Application: Teleport
 Provider type: OAuth2/OpenID Connect
 Client type: Confidential
-Redirect URI: https://warpgate.example.net/@warpgate/api/sso/return
-Issuer URL: https://auth.example.net/application/o/warpgate/
-Scopes: openid, email, profile, warpgate_roles
+Redirect URI: https://teleport.example.net/v1/webapi/oidc/callback
+Issuer URL: https://auth.example.net/application/o/teleport/
+Scopes: openid, email, profile, groups
 ```
 
 Bind an authorization policy that only allows:
 
 ```text
-warpgate-users
-warpgate-admins
+teleport-users
+teleport-admins
 edge-admins
 ```
 
-Create an Authentik scope mapping named `warpgate_roles` that emits role names
-from Authentik group membership. Warpgate should map those roles to SSH and
-Kubernetes targets.
+Teleport maps the Authentik `groups` claim to Teleport roles through the
+`oidc` connector managed by `roles/vps_teleport`.
 
 Recommended access model:
 
 ```text
 tenant-alice
     -> Alice OpenStack project
-    -> Alice VMs through Warpgate
-    -> Alice Kubernetes resources through Warpgate
+    -> Alice VMs through Teleport-issued OpenSSH certificates
+    -> Alice Kubernetes resources through future Teleport or OpenStack policy
 
 tenant-bob
     -> Bob OpenStack project
-    -> Bob VMs through Warpgate
-    -> Bob Kubernetes resources through Warpgate
+    -> Bob VMs through Teleport-issued OpenSSH certificates
+    -> Bob Kubernetes resources through future Teleport or OpenStack policy
 ```
 
 ## OpenStack Federation Strategy
@@ -375,7 +374,7 @@ Monitor:
 - failed login spikes;
 - invitation creation/use;
 - GitHub OAuth callback errors;
-- OIDC provider errors for Warpgate;
+- OIDC provider errors for Teleport;
 - PostgreSQL disk usage;
 - backup job success;
 - HAProxy reload failures;
@@ -396,7 +395,7 @@ Still required before public cutover:
 - Provide `/etc/haproxy/certs/auth.example.net.pem`.
 - Set `authentik_haproxy_enabled: true`.
 - Create the GitHub OAuth App.
-- Configure the GitHub source, invitation flow, groups, policies, and Warpgate
+- Configure the GitHub source, invitation flow, groups, policies, and Teleport
   OIDC provider in Authentik.
 
 ## References

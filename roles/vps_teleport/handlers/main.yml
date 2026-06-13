@@ -1,0 +1,6 @@
+---
+- name: Restart Teleport
+  ansible.builtin.systemd:
+    name: "{{ teleport_service_name }}"
+    state: restarted
+  when: not ansible_check_mode
