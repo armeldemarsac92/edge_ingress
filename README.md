@@ -347,6 +347,7 @@ VPS-specific options live in
 | `edge_vps_ssh_public_key_file` | inventory-specific | Public key stub used to select a 1Password key. |
 | `authentik_enabled` | `true` | Deploys the Authentik Docker Compose stack on the edge VPS. |
 | `authentik_domain` | `auth.example.net` | Public Authentik hostname. |
+| `authentik_image_tag` | `2026.5` | Authentik server/worker image tag, override with `AUTHENTIK_IMAGE_TAG`. |
 | `authentik_haproxy_enabled` | `true` | Enables HAProxy TLS termination for Authentik after a real cert is present. |
 | `teleport_enabled` | `true` | Deploys Teleport auth/proxy services on the edge VPS. |
 | `teleport_domain` | `teleport.example.net` | Public Teleport web/proxy hostname. |

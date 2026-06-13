@@ -5,7 +5,7 @@ authentik_base_dir: /opt/edge/authentik
 authentik_compose_project_name: authentik
 
 authentik_image: ghcr.io/goauthentik/server
-authentik_image_tag: "2026.2"
+authentik_image_tag: "{{ lookup('env', 'AUTHENTIK_IMAGE_TAG') | default('2026.5', true) }}"
 authentik_postgres_image: postgres:16-alpine
 authentik_redis_image: redis:7-alpine
 
