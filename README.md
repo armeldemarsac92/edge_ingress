@@ -340,6 +340,7 @@ VPS-specific options live in
 | --- | --- | --- |
 | `edge_vps_public_endpoint` | `ansible_host` by default | Public WireGuard endpoint used by nodes. |
 | `edge_proxy_backend` | `haproxy` | Public edge proxy implementation. `nginx` role path still exists as fallback. |
+| `edge_haproxy_umbrella_cert_path` | unset | Optional wildcard/SAN PEM bundle reused by local HAProxy routes. |
 | `edge_security_enabled` | `true` | Manages CrowdSec, CrowdSec bouncers, and Fail2ban on the VPS. |
 | `edge_firewall_enabled` | `true` | Enables the VPS firewall role. |
 | `edge_firewall_backend` | `ufw` | Uses UFW for production VPS host firewalling. The nftables backend remains available. |
