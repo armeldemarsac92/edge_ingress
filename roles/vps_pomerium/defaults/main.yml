@@ -101,7 +101,7 @@ pomerium_vm_sshd_config_path: /etc/ssh/sshd_config.d/50-pomerium-user-ca.conf
 pomerium_docker_packages:
   Debian:
     - docker.io
-    - docker-compose-plugin
+    - docker-compose-v2
     - openssh-client
     - openssl
   RedHat:
