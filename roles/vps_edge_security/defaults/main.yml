@@ -59,6 +59,12 @@ edge_security_crowdsec_bouncer_configs:
   - /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
   - /etc/crowdsec/bouncers/crowdsec-spoa-bouncer.yaml
 
+edge_security_crowdsec_config_path: /etc/crowdsec/config.yaml
+edge_security_crowdsec_prometheus_enabled: "{{ edge_metrics_enabled | default(false) }}"
+edge_security_crowdsec_prometheus_listen_addr: ""
+edge_security_crowdsec_prometheus_port: 6060
+edge_security_crowdsec_prometheus_level: full
+
 edge_security_fail2ban_jail_config: /etc/fail2ban/jail.d/defaults-debian.conf
 edge_security_fail2ban_banaction: nftables
 edge_security_fail2ban_backend: systemd

@@ -8,6 +8,8 @@
   roles:
     - role: edge_wireguard
       tags: [wireguard]
+    - role: edge_prometheus_exporters
+      tags: [metrics, prometheus, node-exporter]
 
 - name: Phase 1 - expose OpenStack private DNS over WireGuard
   hosts: openstack_edge_nodes

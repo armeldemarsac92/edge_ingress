@@ -25,6 +25,62 @@
         state: present
       when: edge_security_fail2ban_enabled | bool
 
+    - name: Set CrowdSec Prometheus listen address
+      ansible.builtin.set_fact:
+        edge_security_crowdsec_prometheus_listen_addr_effective: >-
+          {{
+            edge_security_crowdsec_prometheus_listen_addr
+            if edge_security_crowdsec_prometheus_listen_addr | length > 0
+            else edge_vps_loopback_addr.split('/')[0]
+          }}
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - edge_security_crowdsec_prometheus_enabled | bool
+
+    - name: Validate CrowdSec Prometheus inputs
+      ansible.builtin.assert:
+        that:
+          - edge_security_crowdsec_prometheus_listen_addr_effective is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+          - edge_security_crowdsec_prometheus_port | int > 0
+          - edge_security_crowdsec_prometheus_level in ['none', 'aggregated', 'full']
+        fail_msg: "Invalid CrowdSec Prometheus inventory variables."
+        quiet: true
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - edge_security_crowdsec_prometheus_enabled | bool
+
+    - name: Check CrowdSec Prometheus config block
+      ansible.builtin.command:
+        cmd: grep -q '^prometheus:' {{ edge_security_crowdsec_config_path }}
+      register: edge_security_crowdsec_prometheus_block_check
+      changed_when: false
+      failed_when: false
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - edge_security_crowdsec_prometheus_enabled | bool
+
+    - name: Update existing CrowdSec Prometheus config block
+      ansible.builtin.replace:
+        path: "{{ edge_security_crowdsec_config_path }}"
+        regexp: '(?ms)^prometheus:\n(?:^[ \t]+.*\n?)*'
+        replace: "{{ lookup('ansible.builtin.template', 'crowdsec-prometheus.yaml.j2') }}\n"
+      notify: Restart CrowdSec
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - edge_security_crowdsec_prometheus_enabled | bool
+        - edge_security_crowdsec_prometheus_block_check.rc == 0
+
+    - name: Add CrowdSec Prometheus config block
+      ansible.builtin.blockinfile:
+        path: "{{ edge_security_crowdsec_config_path }}"
+        marker: "# {mark} ANSIBLE MANAGED CROWDSEC PROMETHEUS"
+        block: "{{ lookup('ansible.builtin.template', 'crowdsec-prometheus.yaml.j2') }}"
+      notify: Restart CrowdSec
+      when:
+        - edge_security_crowdsec_enabled | bool
+        - edge_security_crowdsec_prometheus_enabled | bool
+        - edge_security_crowdsec_prometheus_block_check.rc != 0
+
     - name: Ensure CrowdSec acquisition directory exists
       ansible.builtin.file:
         path: "{{ edge_security_crowdsec_acquisition_dir }}"

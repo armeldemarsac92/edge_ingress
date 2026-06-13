@@ -1,0 +1,23 @@
+---
+edge_metrics_enabled: false
+edge_metrics_bind_addr: ""
+edge_metrics_node_exporter_enabled: "{{ edge_metrics_enabled }}"
+edge_metrics_node_exporter_port: 9100
+edge_metrics_node_exporter_extra_args: []
+
+edge_metrics_node_exporter_service_name: "{{ edge_metrics_node_exporter_service_names[ansible_os_family] | default(edge_metrics_node_exporter_service_names.Debian) }}"
+edge_metrics_node_exporter_binary: "{{ edge_metrics_node_exporter_binaries[ansible_os_family] | default(edge_metrics_node_exporter_binaries.Debian) }}"
+
+edge_metrics_node_exporter_service_names:
+  Debian: prometheus-node-exporter
+  RedHat: node_exporter
+
+edge_metrics_node_exporter_binaries:
+  Debian: /usr/bin/prometheus-node-exporter
+  RedHat: /usr/bin/node_exporter
+
+edge_metrics_node_exporter_packages:
+  Debian:
+    - prometheus-node-exporter
+  RedHat:
+    - node_exporter

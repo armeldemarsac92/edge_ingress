@@ -93,6 +93,20 @@
   loop_control:
     label: "{{ item.value.vps_if }} bgp"
 
+- name: Allow extra WireGuard TCP ports from configured sources
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item.0 }}"
+    port: "{{ item.1 }}"
+    proto: tcp
+    comment: "WireGuard private TCP {{ item.1 }}"
+  loop: "{{ edge_firewall_wireguard_tcp_sources | product(edge_firewall_wireguard_tcp_ports_extra) | list }}"
+  loop_control:
+    label: "{{ item.0 }} -> {{ item.1 }}/tcp"
+  when:
+    - edge_firewall_wireguard_tcp_sources | length > 0
+    - edge_firewall_wireguard_tcp_ports_extra | length > 0
+
 - name: Allow single-hop BFD from WireGuard peers
   community.general.ufw:
     rule: allow

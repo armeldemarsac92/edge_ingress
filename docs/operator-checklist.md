@@ -63,6 +63,14 @@ openssl s_client -connect <vps_public_ip>:443 -servername app.apps.example.net <
 nc -vz <vps_public_ip> 31001
 ```
 
+Metrics success criteria:
+
+```bash
+ss -ltnp | grep -E ':(6060|9100)\b'
+curl -fsS http://<wireguard-metrics-ip>:9100/metrics >/dev/null
+curl -fsS http://<vps-wireguard-loopback-ip>:6060/metrics >/dev/null
+```
+
 ## Rollback
 
 - Stop the public proxy first.

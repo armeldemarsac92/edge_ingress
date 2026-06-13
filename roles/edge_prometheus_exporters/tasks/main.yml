@@ -1,0 +1,77 @@
+---
+- name: Skip Prometheus exporters when disabled
+  ansible.builtin.debug:
+    msg: "edge_metrics_enabled is false; skipping Prometheus exporter management."
+  when: not edge_metrics_enabled | bool
+
+- name: Configure Prometheus exporters
+  when: edge_metrics_enabled | bool
+  block:
+    - name: Set metrics bind address facts
+      ansible.builtin.set_fact:
+        edge_metrics_node_name: "{{ edge_node_name | default(inventory_hostname) }}"
+        edge_metrics_bind_addr_effective: >-
+          {{
+            edge_metrics_bind_addr
+            if edge_metrics_bind_addr | length > 0
+            else (
+              edge_vps_loopback_addr.split('/')[0]
+              if 'edge_vps' in group_names
+              else wireguard_links[edge_node_name | default(inventory_hostname)].node_addr.split('/')[0]
+            )
+          }}
+
+    - name: Validate metrics bind address
+      ansible.builtin.assert:
+        that:
+          - edge_metrics_bind_addr_effective is match('^([0-9]{1,3}\.){3}[0-9]{1,3}$')
+          - edge_metrics_node_exporter_port | int > 0
+        fail_msg: "Invalid Prometheus exporter bind address or port."
+        quiet: true
+
+    - name: Refresh apt cache before node exporter package install
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when:
+        - edge_metrics_node_exporter_enabled | bool
+        - ansible_os_family == "Debian"
+
+    - name: Install node exporter package
+      ansible.builtin.package:
+        name: "{{ edge_metrics_node_exporter_packages[ansible_os_family] | default(edge_metrics_node_exporter_packages.Debian) }}"
+        state: present
+      when: edge_metrics_node_exporter_enabled | bool
+
+    - name: Create node exporter systemd override directory
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ edge_metrics_node_exporter_service_name }}.service.d"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: edge_metrics_node_exporter_enabled | bool
+
+    - name: Render node exporter WireGuard bind override
+      ansible.builtin.template:
+        src: node-exporter-override.conf.j2
+        dest: "/etc/systemd/system/{{ edge_metrics_node_exporter_service_name }}.service.d/wireguard-bind.conf"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart node exporter
+      when: edge_metrics_node_exporter_enabled | bool
+
+    - name: Flush node exporter handlers before service start
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start node exporter
+      ansible.builtin.systemd:
+        name: "{{ edge_metrics_node_exporter_service_name }}"
+        enabled: true
+        state: started
+      when:
+        - edge_metrics_node_exporter_enabled | bool
+        - not ansible_check_mode

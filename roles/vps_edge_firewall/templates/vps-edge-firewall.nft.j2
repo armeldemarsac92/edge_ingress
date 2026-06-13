@@ -25,6 +25,19 @@ table inet vps_edge_firewall {
 {% endfor %}
         };
     }
+{% if edge_firewall_wireguard_tcp_sources | length > 0 and edge_firewall_wireguard_tcp_ports_extra | length > 0 %}
+
+    set wireguard_tcp_sources {
+        type ipv4_addr;
+        flags interval;
+        elements = { {{ edge_firewall_wireguard_tcp_sources | join(', ') }} };
+    }
+
+    set wireguard_tcp_ports {
+        type inet_service;
+        elements = { {{ edge_firewall_wireguard_tcp_ports_extra | join(', ') }} };
+    }
+{% endif %}
 
     chain input {
         type filter hook input priority filter; policy drop;
@@ -35,6 +48,9 @@ table inet vps_edge_firewall {
 {% endif %}
         tcp dport {{ edge_firewall_ssh_port }} ip saddr @admin_ssh_sources accept
         udp dport @wireguard_udp_ports accept
+{% if edge_firewall_wireguard_tcp_sources | length > 0 and edge_firewall_wireguard_tcp_ports_extra | length > 0 %}
+        tcp dport @wireguard_tcp_ports ip saddr @wireguard_tcp_sources accept
+{% endif %}
         tcp dport @public_tcp_ports accept
     }
 

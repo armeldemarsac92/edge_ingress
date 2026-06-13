@@ -61,6 +61,10 @@ edge_tcp_port_pool_end: 39999
 
 edge_routing_mode: frr
 
+edge_metrics_enabled: true
+edge_metrics_node_exporter_port: "{{ lookup('env', 'EDGE_NODE_EXPORTER_PORT') | default('9100', true) | int }}"
+edge_metrics_scrape_sources: "{{ edge_dns_forwarders }}"
+
 edge_node_snat_prefix: "{{ lookup('env', 'EDGE_NODE_SNAT_PREFIX') | default('10.200.0', true) }}"
 
 # Override with reserved provider-network addresses after Phase 0 discovery.

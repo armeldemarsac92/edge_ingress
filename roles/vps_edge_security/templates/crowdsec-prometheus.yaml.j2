@@ -1,0 +1,5 @@
+prometheus:
+  enabled: {{ edge_security_crowdsec_prometheus_enabled | bool | lower }}
+  level: {{ edge_security_crowdsec_prometheus_level }}
+  listen_addr: {{ edge_security_crowdsec_prometheus_listen_addr_effective }}
+  listen_port: {{ edge_security_crowdsec_prometheus_port | int }}

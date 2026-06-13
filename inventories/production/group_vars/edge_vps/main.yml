@@ -38,6 +38,14 @@ edge_firewall_enabled: true
 edge_firewall_backend: ufw
 edge_admin_ssh_sources: []
 edge_firewall_denied_sources: []
+edge_firewall_wireguard_tcp_sources: "{{ edge_metrics_scrape_sources }}"
+edge_firewall_wireguard_tcp_ports_extra:
+  - "{{ edge_metrics_node_exporter_port }}"
+  - "{{ edge_security_crowdsec_prometheus_port }}"
+
+edge_security_crowdsec_prometheus_enabled: true
+edge_security_crowdsec_prometheus_port: "{{ lookup('env', 'EDGE_CROWDSEC_PROMETHEUS_PORT') | default('6060', true) | int }}"
+edge_security_crowdsec_prometheus_level: full
 
 authentik_enabled: true
 authentik_domain: "{{ lookup('env', 'AUTHENTIK_DOMAIN') | default('auth.' ~ edge_public_root_domain, true) }}"
