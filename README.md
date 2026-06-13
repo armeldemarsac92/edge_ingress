@@ -76,6 +76,8 @@ FRR runs on the VPS and on each node in `openstack_edge_nodes`.
 - `edge_frr_maximum_paths` defaults to the number of configured WireGuard links.
 - The VPS installs an ECMP BGP route for `provider_cidr` through all available
   WireGuard paths.
+- The stable VPS source/service address from `edge_vps_loopback_addr` is managed
+  as a `systemd-networkd` address on the loopback interface.
 
 Expected route on the VPS:
 
@@ -323,6 +325,7 @@ Shared edge options live in
 | `provider_gateway_ip` | `10.200.0.1` | Address used to detect provider egress interfaces. |
 | `edge_routing_mode` | `frr` | `frr` for BGP/BFD, `static` for fixed route metrics. |
 | `edge_frr_maximum_paths` | number of WireGuard links | ECMP path count rendered in FRR. |
+| `edge_vps_loopback_addr` | `10.250.255.1/32` | Stable VPS source/service address rendered into systemd-networkd. |
 | `wireguard_links` | three `/30` links | VPS/node point-to-point tunnel definitions. |
 | `edge_dns_forwarders` | derived from `wireguard_links` | Node resolvers queried by the VPS resolver. |
 | `designate_dns_forwarders` | `10.220.0.11/12/13@53` | Internal Designate/BIND listeners. |

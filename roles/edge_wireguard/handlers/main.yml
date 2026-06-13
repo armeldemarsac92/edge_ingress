@@ -1,4 +1,14 @@
 ---
+- name: Reload systemd-networkd configs
+  ansible.builtin.command: networkctl reload
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Reconfigure edge loopback interface
+  ansible.builtin.command: "networkctl reconfigure {{ edge_vps_loopback_interface }}"
+  changed_when: false
+  when: not ansible_check_mode
+
 - name: Restart WireGuard interfaces
   ansible.builtin.systemd:
     name: "wg-quick@{{ item }}"

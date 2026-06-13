@@ -1,8 +1,32 @@
 ---
-- name: Add stable edge source IP on loopback
-  ansible.builtin.command:
-    cmd: "ip addr replace {{ edge_vps_loopback_addr }} dev lo"
-  changed_when: false
+- name: Ensure systemd-networkd is enabled for edge loopback
+  ansible.builtin.systemd:
+    name: systemd-networkd
+    enabled: true
+    state: started
+  when: not ansible_check_mode
+
+- name: Ensure systemd-networkd config directory exists
+  ansible.builtin.file:
+    path: "{{ edge_vps_loopback_networkd_config_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render edge loopback networkd config
+  ansible.builtin.template:
+    src: edge-loopback.network.j2
+    dest: "{{ edge_vps_loopback_networkd_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd-networkd configs
+    - Reconfigure edge loopback interface
+
+- name: Apply edge loopback networkd config before WireGuard start
+  ansible.builtin.meta: flush_handlers
 
 - name: Set VPS WireGuard managed interfaces
   ansible.builtin.set_fact:

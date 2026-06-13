@@ -33,6 +33,7 @@ Phase 1 success criteria:
 
 ```bash
 ansible-playbook playbooks/validate.yml
+networkctl status lo
 dig @127.0.0.1 apps.example.net SOA
 dig @10.250.11.2 apps.example.net SOA
 wg show
