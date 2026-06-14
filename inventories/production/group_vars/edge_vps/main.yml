@@ -16,17 +16,16 @@ edge_proxy_backend: haproxy
 edge_proxy_manage_nginx_stream_include: true
 edge_local_http_apps: "{{ [authentik_haproxy_app] if authentik_haproxy_enabled | bool else [] }}"
 edge_proxy_haproxy_crowdsec_enabled: true
-edge_haproxy_umbrella_cert_path: "{{ lookup('env', 'EDGE_HAPROXY_UMBRELLA_CERT_PATH') | default('', true) }}"
-edge_control_plane_domain: "{{ lookup('env', 'EDGE_CONTROL_PLANE_DOMAIN') | default('control.' ~ edge_public_root_domain, true) }}"
-edge_control_plane_backend_host: "{{ lookup('env', 'EDGE_CONTROL_PLANE_BACKEND_HOST') | default('10.50.0.50', true) }}"
-edge_control_plane_tls_cert_path: "{{ lookup('env', 'EDGE_CONTROL_PLANE_TLS_CERT_PATH') | default(edge_haproxy_umbrella_cert_path if edge_haproxy_umbrella_cert_path | length > 0 else '/etc/haproxy/certs/' ~ edge_control_plane_domain ~ '.pem', true) }}"
+edge_openstack_domain: "{{ lookup('env', 'EDGE_OPENSTACK_DOMAIN') | default('openstack.' ~ edge_public_root_domain, true) }}"
+edge_openstack_backend_host: "{{ lookup('env', 'EDGE_OPENSTACK_BACKEND_HOST') | default('10.50.0.50', true) }}"
+edge_openstack_tls_cert_path: "{{ lookup('env', 'EDGE_OPENSTACK_TLS_CERT_PATH') | default('/etc/haproxy/certs/openstack.' ~ edge_public_root_domain ~ '.pem', true) }}"
 edge_proxy_haproxy_local_tls_routes:
-  - name: control_plane
+  - name: openstack
     hostname_suffixes:
-      - ".{{ edge_control_plane_domain }}"
-    backend_host: "{{ edge_control_plane_backend_host }}"
+      - ".{{ edge_openstack_domain }}"
+    backend_host: "{{ edge_openstack_backend_host }}"
     backend_port: 443
-    tls_cert: "{{ edge_control_plane_tls_cert_path }}"
+    tls_cert: "{{ edge_openstack_tls_cert_path }}"
     hsts: true
     redirect_http: false
 edge_proxy_haproxy_cert_bundles: >-
@@ -89,7 +88,7 @@ pomerium_image_tag: "{{ lookup('env', 'POMERIUM_IMAGE_TAG') | default('v0.32.8',
 pomerium_ssh_public_port: "{{ lookup('env', 'POMERIUM_SSH_PUBLIC_PORT') | default('2222', true) | int }}"
 pomerium_haproxy_enabled: true
 pomerium_haproxy_hostnames: "{{ lookup('env', 'POMERIUM_HAPROXY_HOSTNAMES') | default(pomerium_authenticate_domain, true) | split(',') | map('trim') | list }}"
-pomerium_haproxy_cert_path: "{{ lookup('env', 'POMERIUM_HAPROXY_CERT_PATH') | default(edge_haproxy_umbrella_cert_path if edge_haproxy_umbrella_cert_path | length > 0 else '/etc/haproxy/certs/' ~ pomerium_authenticate_domain ~ '.pem', true) }}"
+pomerium_haproxy_cert_path: "{{ lookup('env', 'POMERIUM_HAPROXY_CERT_PATH') | default('/etc/haproxy/certs/' ~ pomerium_authenticate_domain ~ '.pem', true) }}"
 pomerium_haproxy_pem_src: ""
 pomerium_haproxy_cert_src: ""
 pomerium_haproxy_chain_src: ""

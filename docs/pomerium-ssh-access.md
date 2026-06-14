@@ -100,13 +100,6 @@ POMERIUM_HAPROXY_PEM_SRC
 POMERIUM_HAPROXY_CERT_SRC + POMERIUM_HAPROXY_KEY_SRC
 ```
 
-If a wildcard/SAN bundle is already installed on the VPS and reused by multiple
-local HAProxy routes, set:
-
-```text
-EDGE_HAPROXY_UMBRELLA_CERT_PATH=/etc/haproxy/certs/wildcard.example.net.pem
-```
-
 The default public host list only includes `authenticate.example.net`. If you
 use a wildcard/SAN certificate and want extra hostnames routed to Pomerium, set:
 
