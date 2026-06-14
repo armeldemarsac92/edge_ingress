@@ -18,7 +18,7 @@ edge_local_http_apps: "{{ [authentik_haproxy_app] if authentik_haproxy_enabled |
 edge_proxy_haproxy_crowdsec_enabled: true
 edge_haproxy_umbrella_cert_path: "{{ lookup('env', 'EDGE_HAPROXY_UMBRELLA_CERT_PATH') | default('', true) }}"
 edge_control_plane_domain: "{{ lookup('env', 'EDGE_CONTROL_PLANE_DOMAIN') | default('control.' ~ edge_public_root_domain, true) }}"
-edge_control_plane_backend_host: "{{ lookup('env', 'EDGE_CONTROL_PLANE_BACKEND_HOST') | default('10.200.0.50', true) }}"
+edge_control_plane_backend_host: "{{ lookup('env', 'EDGE_CONTROL_PLANE_BACKEND_HOST') | default('10.50.0.50', true) }}"
 edge_control_plane_tls_cert_path: "{{ lookup('env', 'EDGE_CONTROL_PLANE_TLS_CERT_PATH') | default(edge_haproxy_umbrella_cert_path if edge_haproxy_umbrella_cert_path | length > 0 else '/etc/haproxy/certs/' ~ edge_control_plane_domain ~ '.pem', true) }}"
 edge_proxy_haproxy_local_tls_routes:
   - name: control_plane
