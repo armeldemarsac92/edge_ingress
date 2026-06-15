@@ -12,6 +12,7 @@ edge_private_dns_zones: "{{ lookup('env', 'EDGE_PRIVATE_DNS_ZONES') | default(ed
 edge_domain: "{{ edge_private_dns_zones[0] }}"
 edge_vps_inventory_name: edge1
 edge_vps_loopback_addr: "{{ lookup('env', 'EDGE_VPS_LOOPBACK_ADDR') | default('10.250.255.1/32', true) }}"
+edge_vps_dns_source_addr: "{{ lookup('env', 'EDGE_VPS_DNS_SOURCE_ADDR') | default(edge_vps_loopback_addr.split('/')[0], true) }}"
 
 provider_cidr: "{{ lookup('env', 'EDGE_PROVIDER_CIDR') | default('10.200.0.0/24', true) }}"
 provider_gateway_ip: "{{ lookup('env', 'EDGE_PROVIDER_GATEWAY_IP') | default('10.200.0.1', true) }}"

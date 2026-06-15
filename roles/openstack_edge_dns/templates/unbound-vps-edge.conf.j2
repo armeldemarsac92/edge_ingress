@@ -11,6 +11,7 @@ server:
     do-tcp: yes
     access-control: 0.0.0.0/0 refuse
     access-control: {{ wireguard_links[openstack_edge_dns_node_name].vps_addr.split('/')[0] }}/32 allow
+    access-control: {{ edge_vps_dns_source_addr }}/32 allow
     hide-identity: yes
     hide-version: yes
     harden-glue: yes

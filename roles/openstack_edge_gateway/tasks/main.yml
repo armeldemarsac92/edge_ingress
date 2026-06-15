@@ -10,6 +10,7 @@
       - provider_cidr is defined
       - provider_gateway_ip is defined
       - edge_management_cidrs | length > 0
+      - edge_vps_dns_source_addr is match('^[0-9.]+$')
       - (not edge_gateway_use_snat) or edge_node_snat_ips[edge_gateway_node_name] is defined
       - (not edge_gateway_use_snat) or edge_node_snat_ips[edge_gateway_node_name] not in [none, ""]
     quiet: true

@@ -10,6 +10,7 @@
       - edge_private_dns_zones is sequence
       - edge_private_dns_zones | length > 0
       - designate_dns_forwarders | length > 0
+      - edge_vps_dns_source_addr is match('^[0-9.]+$')
     quiet: true
 
 - name: Refresh apt cache before Unbound package install

@@ -10,6 +10,8 @@ table inet vps_edge_gateway {
         type filter hook input priority filter; policy accept;
         iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip saddr {{ wireguard_links[edge_gateway_node_name].vps_addr.split('/')[0] }}/32 udp dport 53 accept
         iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip saddr {{ wireguard_links[edge_gateway_node_name].vps_addr.split('/')[0] }}/32 tcp dport 53 accept
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip saddr {{ edge_vps_dns_source_addr }}/32 udp dport 53 accept
+        iifname "{{ wireguard_links[edge_gateway_node_name].node_if }}" ip saddr {{ edge_vps_dns_source_addr }}/32 tcp dport 53 accept
     }
 
     chain forward {
