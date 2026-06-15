@@ -18,6 +18,9 @@ server:
     use-syslog: yes
     verbosity: 1
     private-address: {{ provider_cidr }}
+{% for zone in edge_private_dns_zones %}
+    private-domain: "{{ zone | regex_replace('\\.$', '') }}."
+{% endfor %}
 
 {% for zone in edge_private_dns_zones %}
 forward-zone:

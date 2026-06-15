@@ -34,6 +34,14 @@
       failed_when: edge_validation_vps_app_dns.stdout_lines | select('match', edge_validation_app_address_regex_effective) | list | length == 0
       when: edge_validation_app_hostname | length > 0
 
+    - name: Check private app A record from each node forwarder when supplied
+      ansible.builtin.command: "dig @{{ item }} {{ edge_validation_app_hostname }} A +short"
+      changed_when: false
+      register: edge_validation_forwarder_app_dns
+      failed_when: edge_validation_forwarder_app_dns.stdout_lines | select('match', edge_validation_app_address_regex_effective) | list | length == 0
+      loop: "{{ edge_dns_forwarders }}"
+      when: edge_validation_app_hostname | length > 0
+
     - name: Check route to provider network
       ansible.builtin.command: "ip route get {{ edge_validation_provider_ip }}"
       changed_when: false
