@@ -82,7 +82,7 @@ authentik_haproxy_cert_bundle:
 
 pomerium_enabled: true
 pomerium_domain: "{{ lookup('env', 'POMERIUM_DOMAIN') | default('pomerium.' ~ edge_public_root_domain, true) }}"
-pomerium_authenticate_domain: "{{ lookup('env', 'POMERIUM_AUTHENTICATE_DOMAIN') | default('authenticate.' ~ edge_public_root_domain, true) }}"
+pomerium_authenticate_domain: "{{ lookup('env', 'POMERIUM_AUTHENTICATE_DOMAIN') | default('ssh.' ~ edge_public_root_domain, true) }}"
 pomerium_base_dir: "{{ lookup('env', 'POMERIUM_BASE_DIR') | default('/opt/edge/pomerium', true) }}"
 pomerium_image_tag: "{{ lookup('env', 'POMERIUM_IMAGE_TAG') | default('v0.32.8', true) }}"
 pomerium_ssh_public_port: "{{ lookup('env', 'POMERIUM_SSH_PUBLIC_PORT') | default('2222', true) | int }}"

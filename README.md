@@ -350,7 +350,7 @@ VPS-specific options live in
 | `authentik_image_tag` | `2026.5` | Authentik server/worker image tag, override with `AUTHENTIK_IMAGE_TAG`. |
 | `authentik_haproxy_enabled` | `true` | Enables HAProxy TLS termination for Authentik after a real cert is present. |
 | `pomerium_enabled` | `true` | Deploys Pomerium Core native SSH access on the edge VPS. |
-| `pomerium_authenticate_domain` | `authenticate.example.net` | Public Pomerium authenticate service hostname. |
+| `pomerium_authenticate_domain` | `ssh.example.net` | Public Pomerium authenticate service hostname. |
 | `pomerium_ssh_public_port` | `2222` | Public Pomerium native SSH proxy entry point. |
 | `pomerium_ssh_routes` | `[]` | Dynamic OpenStack SSH target route list. |
 

@@ -15,7 +15,7 @@ pomerium_ssh_dir: "{{ pomerium_base_dir }}/ssh"
 pomerium_public_dir: "{{ pomerium_base_dir }}/public"
 
 pomerium_domain: "{{ lookup('env', 'POMERIUM_DOMAIN') | default('pomerium.' ~ edge_public_root_domain, true) }}"
-pomerium_authenticate_domain: "{{ lookup('env', 'POMERIUM_AUTHENTICATE_DOMAIN') | default('authenticate.' ~ edge_public_root_domain, true) }}"
+pomerium_authenticate_domain: "{{ lookup('env', 'POMERIUM_AUTHENTICATE_DOMAIN') | default('ssh.' ~ edge_public_root_domain, true) }}"
 pomerium_authenticate_service_url: "https://{{ pomerium_authenticate_domain }}"
 
 pomerium_http_bind: "{{ lookup('env', 'POMERIUM_HTTP_BIND') | default('127.0.0.1:8443', true) }}"

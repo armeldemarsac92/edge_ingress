@@ -232,7 +232,7 @@ Create an Authentik OAuth2/OpenID Connect provider for Pomerium:
 Application: Pomerium
 Provider type: OAuth2/OpenID Connect
 Client type: Confidential
-Redirect URI: https://authenticate.example.net/oauth2/callback
+Redirect URI: https://ssh.example.net/oauth2/callback
 Issuer URL: https://auth.example.net/application/o/pomerium/
 Scopes: openid, email, profile, groups, offline_access
 ```

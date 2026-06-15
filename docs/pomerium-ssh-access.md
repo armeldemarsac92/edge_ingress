@@ -29,7 +29,7 @@ Not managed here:
 ```text
 SSH client
     |
-    | ssh <linux-user>@<route>@authenticate.example.net -p 2222
+    | ssh <linux-user>@<route>@ssh.example.net -p 2222
     v
 Pomerium native SSH proxy on the edge VPS
     |
@@ -54,7 +54,7 @@ Create an Authentik OAuth2/OpenID Connect provider for Pomerium:
 Application: Pomerium
 Provider type: OAuth2/OpenID Connect
 Client type: Confidential
-Redirect URI: https://authenticate.example.net/oauth2/callback
+Redirect URI: https://ssh.example.net/oauth2/callback
 Issuer URL: https://auth.example.net/application/o/pomerium/
 Scopes: openid, email, profile, groups, offline_access
 ```
@@ -82,14 +82,14 @@ HAProxy stays the only public HTTP/TLS entry point. The Pomerium role appends a
 local HTTPS application route for:
 
 ```text
-authenticate.example.net -> 127.0.0.1:8443
+ssh.example.net -> 127.0.0.1:8443
 ```
 
 Pomerium runs HTTP-only on loopback with `insecure_server: true`; HAProxy
 terminates public TLS using:
 
 ```text
-/etc/haproxy/certs/authenticate.example.net.pem
+/etc/haproxy/certs/ssh.example.net.pem
 ```
 
 Set `POMERIUM_HAPROXY_CERT_PATH` if the certificate lives elsewhere. If the PEM
@@ -100,11 +100,11 @@ POMERIUM_HAPROXY_PEM_SRC
 POMERIUM_HAPROXY_CERT_SRC + POMERIUM_HAPROXY_KEY_SRC
 ```
 
-The default public host list only includes `authenticate.example.net`. If you
+The default public host list only includes `ssh.example.net`. If you
 use a wildcard/SAN certificate and want extra hostnames routed to Pomerium, set:
 
 ```text
-POMERIUM_HAPROXY_HOSTNAMES=authenticate.example.net,pomerium.example.net
+POMERIUM_HAPROXY_HOSTNAMES=ssh.example.net,pomerium.example.net
 ```
 
 ## Native SSH Port
@@ -176,7 +176,7 @@ Notes:
 Connect with:
 
 ```bash
-ssh armeldemarsac@tenant-a-node-1@authenticate.example.net -p 2222
+ssh armeldemarsac@tenant-a-node-1@ssh.example.net -p 2222
 ```
 
 ## Main Variables
@@ -184,12 +184,12 @@ ssh armeldemarsac@tenant-a-node-1@authenticate.example.net -p 2222
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `POMERIUM_IMAGE_TAG` | `v0.32.8` | Pomerium container tag. |
-| `POMERIUM_AUTHENTICATE_DOMAIN` | `authenticate.example.net` | Public authenticate service URL host. |
+| `POMERIUM_AUTHENTICATE_DOMAIN` | `ssh.example.net` | Public authenticate service URL host. |
 | `POMERIUM_OIDC_PROVIDER_URL` | `https://auth.example.net/application/o/pomerium/` | Authentik OIDC issuer base URL. |
 | `POMERIUM_OIDC_CLIENT_ID` | unset | Authentik OAuth client ID. |
 | `POMERIUM_OIDC_CLIENT_SECRET` | unset | Authentik OAuth client secret. |
 | `POMERIUM_SSH_PUBLIC_PORT` | `2222` | Public native SSH proxy port. |
-| `POMERIUM_HAPROXY_CERT_PATH` | `/etc/haproxy/certs/authenticate.example.net.pem` | Public TLS PEM for HAProxy. |
+| `POMERIUM_HAPROXY_CERT_PATH` | `/etc/haproxy/certs/ssh.example.net.pem` | Public TLS PEM for HAProxy. |
 | `pomerium_ssh_routes` | `[]` | Dynamic OpenStack SSH target routes. |
 
 ## Operator Checks
@@ -206,5 +206,5 @@ sed -n '1,120p' /opt/edge/pomerium/public/cloud-init-trust-pomerium-ssh-ca.yaml
 From a client:
 
 ```bash
-ssh armeldemarsac@<route>@authenticate.example.net -p 2222
+ssh armeldemarsac@<route>@ssh.example.net -p 2222
 ```
