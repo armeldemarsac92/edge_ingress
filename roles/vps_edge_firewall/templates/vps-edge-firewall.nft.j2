@@ -10,8 +10,7 @@ table inet vps_edge_firewall {
         type inet_service;
         elements = {
             80,
-            443{% if edge_minecraft_enabled | bool %},
-            25565{% endif %}{% for forward in edge_tcp_forwards | default([]) %},
+            443{% for forward in edge_tcp_forwards | default([]) %},
             {{ forward.public_port }}{% endfor %}{% for port in edge_firewall_public_tcp_ports_extra %},
             {{ port }}{% endfor %}
         };

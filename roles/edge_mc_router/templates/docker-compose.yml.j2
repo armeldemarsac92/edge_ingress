@@ -1,0 +1,27 @@
+---
+services:
+  mc-router:
+    image: {{ mc_router_image | quote }}
+    container_name: {{ mc_router_container_name | quote }}
+    restart: {{ mc_router_restart_policy | quote }}
+    network_mode: {{ mc_router_network_mode | quote }}
+    dns:
+      - {{ mc_router_resolver | quote }}
+{% if mc_router_network_mode != 'host' %}
+    ports:
+      - "{{ mc_router_port }}:{{ mc_router_port }}/tcp"
+{% endif %}
+    environment:
+      TZ: {{ mc_router_timezone | quote }}
+      ROUTES_CONFIG: /config/routes.json
+      ROUTES_CONFIG_WATCH: "{{ (mc_router_routes_config_watch | bool) | string | lower }}"
+      PORT: "{{ mc_router_port }}"
+      LOG_LEVEL: {{ mc_router_log_level | quote }}
+      CONNECTION_RATE_LIMIT: "{{ mc_router_connection_rate_limit }}"
+    volumes:
+      - "{{ mc_router_routes_config_path }}:/config/routes.json:ro"
+    logging:
+      driver: {{ mc_router_log_driver | quote }}
+      options:
+        max-size: {{ mc_router_log_max_size | quote }}
+        max-file: {{ mc_router_log_max_file | quote }}

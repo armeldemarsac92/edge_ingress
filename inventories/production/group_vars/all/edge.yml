@@ -74,6 +74,3 @@ edge_node_snat_ips:
   edge-node3: "{{ edge_node_snat_prefix }}.13"
 
 edge_tcp_forwards: []
-
-edge_minecraft_enabled: false
-edge_minecraft_routes: []

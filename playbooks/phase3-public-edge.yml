@@ -8,5 +8,7 @@
       tags: [security, crowdsec, fail2ban]
     - role: vps_edge_proxy
       tags: [proxy]
+    - role: edge_mc_router
+      tags: [minecraft, mc-router]
     - role: vps_edge_firewall
-      tags: [firewall]
+      tags: [firewall, minecraft, mc-router]

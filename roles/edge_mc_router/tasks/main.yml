@@ -1,0 +1,92 @@
+---
+- name: Skip Minecraft router when disabled
+  ansible.builtin.debug:
+    msg: "mc_router_enabled is false; skipping Minecraft router deployment."
+  when: not mc_router_enabled | bool
+
+- name: Configure Minecraft router
+  when: mc_router_enabled | bool
+  block:
+    - name: Validate Minecraft router inputs
+      ansible.builtin.assert:
+        that:
+          - mc_router_directory is match('^/')
+          - mc_router_compose_file is match('^/')
+          - mc_router_routes_config_path is match('^/')
+          - mc_router_image | length > 0
+          - mc_router_container_name is match('^[A-Za-z0-9_.-]+$')
+          - mc_router_restart_policy | length > 0
+          - mc_router_network_mode in ['host', 'bridge']
+          - mc_router_port | int > 0
+          - mc_router_port | int <= 65535
+          - mc_router_timezone | length > 0
+          - mc_router_log_level in ['debug', 'info', 'warn', 'error']
+          - mc_router_connection_rate_limit | int >= 0
+          - mc_router_resolver is match('^[A-Za-z0-9_.:-]+$')
+        fail_msg: "Invalid Minecraft router inventory variables."
+        quiet: true
+
+    - name: Refresh apt cache before Minecraft router prerequisites
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install Minecraft router prerequisites
+      ansible.builtin.package:
+        name: "{{ mc_router_docker_packages[ansible_os_family] | default(mc_router_docker_packages.Debian) }}"
+        state: present
+
+    - name: Enable and start Docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+      when: not ansible_check_mode
+
+    - name: Create Minecraft router directory
+      ansible.builtin.file:
+        path: "{{ mc_router_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create initial Minecraft router routes file when missing
+      ansible.builtin.template:
+        src: routes.json.j2
+        dest: "{{ mc_router_routes_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        force: false
+      notify: Restart Minecraft router stack
+
+    - name: Render Minecraft router Compose file
+      ansible.builtin.template:
+        src: docker-compose.yml.j2
+        dest: "{{ mc_router_compose_file }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Minecraft router stack
+
+    - name: Flush Minecraft router handlers before service checks
+      ansible.builtin.meta: flush_handlers
+
+    - name: Start Minecraft router stack
+      ansible.builtin.command:
+        cmd: "docker compose -f {{ mc_router_compose_file }} up -d --remove-orphans"
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Wait for Minecraft router listener
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: "{{ mc_router_port | int }}"
+        timeout: 60
+      when: not ansible_check_mode
+
+    - name: Add Minecraft router public port to firewall extras
+      ansible.builtin.set_fact:
+        edge_firewall_public_tcp_ports_extra: "{{ ((edge_firewall_public_tcp_ports_extra | default([])) + [mc_router_port | int]) | unique | list }}"

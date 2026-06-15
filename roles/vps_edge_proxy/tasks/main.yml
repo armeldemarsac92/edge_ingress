@@ -139,11 +139,6 @@
       loop_control:
         label: "{{ item.item.name | default(item.item.tls_cert) }}"
 
-    - name: Stop if Minecraft routing was requested without a Minecraft-aware proxy
-      ansible.builtin.fail:
-        msg: "edge_minecraft_enabled is true, but this role does not configure a Minecraft-aware proxy. Add that role before enabling 25565/tcp routing."
-      when: edge_minecraft_enabled | bool
-
     - name: Configure HAProxy edge proxy
       ansible.builtin.import_tasks: haproxy.yml
       when: edge_proxy_backend == "haproxy"

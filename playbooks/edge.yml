@@ -1,0 +1,3 @@
+---
+- name: Import public edge services
+  ansible.builtin.import_playbook: phase3-public-edge.yml

@@ -1,0 +1,6 @@
+---
+- name: Restart Minecraft router stack
+  ansible.builtin.command:
+    cmd: "docker compose -f {{ mc_router_compose_file }} up -d --remove-orphans"
+  changed_when: true
+  when: not ansible_check_mode

@@ -151,6 +151,20 @@
         or edge_validation_pomerium_listeners.stdout is not search(':' ~ (pomerium_ssh_public_port | string))
       when: pomerium_enabled | default(false) | bool
 
+    - name: Check Minecraft router container state when enabled
+      ansible.builtin.command: "docker compose -f {{ mc_router_compose_file | default((mc_router_directory | default('/opt/mc-router')) ~ '/docker-compose.yml') }} ps --status running --services"
+      changed_when: false
+      register: edge_validation_mc_router_compose
+      failed_when: "'mc-router' not in edge_validation_mc_router_compose.stdout_lines"
+      when: mc_router_enabled | default(false) | bool
+
+    - name: Check Minecraft router listener when enabled
+      ansible.builtin.command: ss -ltn
+      changed_when: false
+      register: edge_validation_mc_router_listener
+      failed_when: edge_validation_mc_router_listener.stdout is not search(':' ~ (mc_router_port | default(25565) | string))
+      when: mc_router_enabled | default(false) | bool
+
 - name: Validate OpenStack edge node services
   hosts: openstack_edge_nodes
   gather_facts: false

@@ -43,7 +43,6 @@
     edge_firewall_ufw_public_tcp_ports: >-
       {{
         ([edge_firewall_ssh_port | int, 80, 443]
-        + ([25565] if edge_minecraft_enabled | default(false) | bool else [])
         + (edge_tcp_forwards | default([]) | map(attribute='public_port') | map('int') | list)
         + (edge_firewall_public_tcp_ports_extra | map('int') | list))
         | unique

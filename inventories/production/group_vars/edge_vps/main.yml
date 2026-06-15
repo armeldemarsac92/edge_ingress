@@ -104,3 +104,5 @@ pomerium_idp_provider_url: "{{ lookup('env', 'POMERIUM_OIDC_PROVIDER_URL') | def
 pomerium_idp_client_id: "{{ lookup('env', 'POMERIUM_OIDC_CLIENT_ID') | default('', true) }}"
 pomerium_idp_client_secret: "{{ lookup('env', 'POMERIUM_OIDC_CLIENT_SECRET') | default('', true) }}"
 pomerium_ssh_routes: []
+
+mc_router_enabled: true

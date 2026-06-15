@@ -1,0 +1,30 @@
+---
+mc_router_enabled: false
+
+mc_router_directory: /opt/mc-router
+mc_router_compose_file: "{{ mc_router_directory }}/docker-compose.yml"
+mc_router_routes_config_path: "{{ mc_router_directory }}/routes.json"
+
+mc_router_image: itzg/mc-router:latest
+mc_router_container_name: mc-router
+mc_router_restart_policy: unless-stopped
+mc_router_network_mode: host
+
+mc_router_port: 25565
+mc_router_timezone: Europe/Paris
+mc_router_log_level: info
+mc_router_connection_rate_limit: 5
+mc_router_routes_config_watch: true
+mc_router_resolver: "{{ edge_proxy_resolver | default(vps_private_resolver_bind_address | default('127.0.0.1')) }}"
+
+mc_router_log_driver: json-file
+mc_router_log_max_size: 10m
+mc_router_log_max_file: "3"
+
+mc_router_docker_packages:
+  Debian:
+    - docker.io
+    - docker-compose-v2
+  RedHat:
+    - docker
+    - docker-compose-plugin

@@ -38,7 +38,7 @@ Deployed defaults:
 - Prometheus scrape endpoints: node exporter and CrowdSec metrics on the VPS
   WireGuard loopback address
 - Generic TCP forwards: none by default with `edge_tcp_forwards: []`
-- Minecraft routing: not enabled with `edge_minecraft_enabled: false`
+- Minecraft routing: `edge_mc_router` deploys `itzg/mc-router` on `25565/tcp`
 
 WireGuard private keys are generated and stored only on the target hosts under
 `/etc/wireguard/keys`. They are not stored in inventory and are not printed by
@@ -185,9 +185,16 @@ The generic TCP port-forward model is the one currently implemented.
 
 Minecraft:
 
-- `edge_minecraft_enabled` exists as a guard, but Minecraft routing is not
-  implemented by this HAProxy role.
-- Add a Minecraft-aware proxy role before enabling `25565/tcp`.
+- `edge_mc_router` deploys `itzg/mc-router` as a separate Docker Compose
+  service on `25565/tcp`.
+- HAProxy does not route Minecraft traffic. Java edition routing is handled from
+  the Minecraft handshake by `mc-router`.
+- The container uses host networking and `mc_router_resolver`, defaulting to the
+  same `edge_proxy_resolver` value HAProxy uses. This keeps backend DNS lookups
+  on the VPS Unbound path.
+- An external reconciler should own dynamic tenant mappings by updating
+  `/opt/mc-router/routes.json`; Ansible only creates the initial file when it is
+  missing.
 
 ### OpenStack Host Gatewaying
 
@@ -220,6 +227,7 @@ inventories/production/
   group_vars/
 playbooks/
   discovery.yml
+  edge.yml
   phase1-wireguard-dns.yml
   phase2-routing.yml
   phase3-public-edge.yml
@@ -237,6 +245,7 @@ roles/
   vps_edge_security/
   vps_edge_proxy/
   vps_edge_firewall/
+  edge_mc_router/
   vps_authentik/
   vps_pomerium/
 docs/
@@ -291,6 +300,12 @@ SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase4-auth
 SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/phase5-pomerium.yml
 ```
 
+Apply or repair only the public edge Minecraft router:
+
+```bash
+SSH_AUTH_SOCK=$HOME/.1password/agent.sock ansible-playbook playbooks/edge.yml --tags mc-router
+```
+
 Or apply the full site:
 
 ```bash
@@ -331,7 +346,6 @@ Shared edge options live in
 | `edge_node_snat_ips` | `10.200.0.11/12/13` | SNAT source IP per OpenStack edge node. |
 | `edge_management_cidrs` | management VLAN CIDRs | Networks blocked from the WireGuard edge path. |
 | `edge_tcp_forwards` | `[]` | Explicit generic TCP public-port mappings. |
-| `edge_minecraft_enabled` | `false` | Guard for future Minecraft-aware routing. |
 
 VPS-specific options live in
 `inventories/production/group_vars/edge_vps/main.yml`.
@@ -353,6 +367,12 @@ VPS-specific options live in
 | `pomerium_authenticate_domain` | `ssh.example.net` | Public Pomerium authenticate service hostname. |
 | `pomerium_ssh_public_port` | `2222` | Public Pomerium native SSH proxy entry point. |
 | `pomerium_ssh_routes` | `[]` | Dynamic OpenStack SSH target route list. |
+| `mc_router_enabled` | `true` | Deploys `itzg/mc-router` on public `25565/tcp`. |
+| `mc_router_directory` | `/opt/mc-router` | Compose and initial routes file directory. |
+| `mc_router_image` | `itzg/mc-router:latest` | Minecraft router container image. |
+| `mc_router_port` | `25565` | Public Minecraft Java listener port. |
+| `mc_router_resolver` | `edge_proxy_resolver` | DNS resolver used by the container for backend lookups. |
+| `mc_router_network_mode` | `host` | Keeps `127.0.0.1:53` resolver access aligned with HAProxy. |
 
 The Authentik identity broker plan and runbook live in
 `docs/authentik-identity-broker.md`.
