@@ -56,7 +56,17 @@
     wg_listen_port: "{{ item.value.vps_listen_port }}"
     wg_private_key: "{{ edge_wireguard_generated_private_keys[item.value.vps_if] }}"
     wg_peer_public_key: "{{ hostvars[item.key].edge_wireguard_generated_public_keys[item.value.node_if] }}"
-    wg_peer_allowed_ips: "{{ edge_wireguard_vps_peer_allowed_ips }}"
+    wg_peer_allowed_ips: >-
+      {{
+        edge_wireguard_vps_peer_allowed_ips_by_link[item.key]
+        | default(edge_wireguard_vps_peer_allowed_ips)
+        if (
+          edge_wireguard_vps_peer_allowed_ips_by_link[item.key]
+          | default(edge_wireguard_vps_peer_allowed_ips)
+          | length
+        ) > 0
+        else ([item.value.node_addr.split('/')[0] ~ '/32', provider_cidr] + edge_wireguard_vps_peer_allowed_ips_extra)
+      }}
     wg_peer_endpoint: ""
     wg_persistent_keepalive: 0
   loop: "{{ wireguard_links | dict2items }}"

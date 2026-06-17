@@ -82,6 +82,9 @@ frontend edge_http
 {% else %}
     http-request set-dst var(txn.edge_dst)
 {% endif %}
+{% for header in edge_proxy_haproxy_strip_response_headers %}
+    http-response del-header {{ header }}
+{% endfor %}
     default_backend edge_http_dynamic
 
 backend edge_http_dynamic
@@ -153,6 +156,9 @@ frontend edge_local_https_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
 {% if route.hsts | default(false) | bool %}
     http-response set-header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 {% endif %}
+{% for header in edge_proxy_haproxy_strip_response_headers %}
+    http-response del-header {{ header }}
+{% endfor %}
     default_backend edge_local_http_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}
 
 backend edge_local_http_{{ route.name | regex_replace('[^A-Za-z0-9_]', '_') }}

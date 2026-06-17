@@ -1,0 +1,9 @@
+# Ansible managed: edge host audit watches.
+{% for item in edge_security_auditd_watch_stats.results | default([]) %}
+{% if item.stat.exists %}
+-w {{ item.item.path }} -p {{ item.item.permissions | default('wa') }} -k {{ item.item.key }}
+{% endif %}
+{% endfor %}
+{% for rule in edge_security_auditd_extra_rules %}
+{{ rule }}
+{% endfor %}

@@ -5,6 +5,10 @@ pomerium_image: "{{ lookup('env', 'POMERIUM_IMAGE') | default('pomerium/pomerium
 pomerium_image_tag: "{{ lookup('env', 'POMERIUM_IMAGE_TAG') | default('v0.32.8', true) }}"
 pomerium_compose_project_name: "{{ lookup('env', 'POMERIUM_COMPOSE_PROJECT_NAME') | default('edge-pomerium', true) }}"
 pomerium_service_name: pomerium-compose
+pomerium_nova_reconciler_supervision_enabled: true
+pomerium_nova_reconciler_container_name: openstack-pomerium-nova-reconciler
+pomerium_nova_reconciler_service_name: openstack-pomerium-nova-reconciler
+pomerium_nova_reconciler_restart_sec: 15
 
 pomerium_base_dir: "{{ lookup('env', 'POMERIUM_BASE_DIR') | default('/opt/edge/pomerium', true) }}"
 pomerium_config_path: "{{ pomerium_base_dir }}/config.yaml"

@@ -1,0 +1,6 @@
+# Ansible managed: edge log retention.
+[Journal]
+MaxRetentionSec={{ edge_security_journald_max_retention_sec }}
+{% if edge_security_journald_system_max_use | string | length > 0 %}
+SystemMaxUse={{ edge_security_journald_system_max_use }}
+{% endif %}

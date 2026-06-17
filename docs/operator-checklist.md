@@ -14,6 +14,19 @@
   publicly reachable through allocated TCP ports.
 - Confirm the intended VPS firewall backend and public ports before enabling
   `edge_firewall_enabled`.
+- Confirm Ansible reaches the VPS as a non-root admin user. The security role
+  disables direct root SSH and preserves then removes `/root/.ssh/authorized_keys`
+  by default.
+- If the admin SSH or OpenStack WireGuard peer public source addresses are stable,
+  set `EDGE_ADMIN_SSH_SOURCES` and `EDGE_WIREGUARD_PUBLIC_SOURCES` as comma-separated
+  CIDR/IP allowlists before applying the firewall role. Set
+  `EDGE_FIREWALL_REQUIRE_ADMIN_SSH_SOURCES=true` or
+  `EDGE_FIREWALL_REQUIRE_WIREGUARD_SOURCES=true` only after confirming those
+  allowlists are complete.
+- To let the playbook manage HAProxy ACME certificates, set `EDGE_ACME_ENABLED`,
+  `EDGE_ACME_EMAIL`, `EDGE_ACME_AUTHENTICATOR`, and any DNS plugin package/argument
+  variables required by the provider, such as `EDGE_ACME_CERTBOT_PLUGIN_PACKAGES`
+  and `EDGE_ACME_EXTRA_ARGS`.
 
 ## Validation
 
@@ -70,6 +83,23 @@ Metrics success criteria:
 ss -ltnp | grep -E ':(6060|9100)\b'
 curl -fsS http://<wireguard-metrics-ip>:9100/metrics >/dev/null
 curl -fsS http://<vps-wireguard-loopback-ip>:6060/metrics >/dev/null
+```
+
+Host hardening checks:
+
+```bash
+sshd -T | grep -E 'permitrootlogin|passwordauthentication|kbdinteractiveauthentication'
+test ! -e /root/.ssh/authorized_keys
+systemctl is-active auditd
+auditctl -s
+```
+
+Certificate automation checks:
+
+```bash
+systemctl list-timers '*cert*'
+certbot renew --dry-run
+openssl x509 -in /etc/haproxy/certs/auth.example.net.pem -noout -dates
 ```
 
 ## Rollback

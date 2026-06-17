@@ -9,3 +9,11 @@
     name: "{{ pomerium_service_name }}"
     state: restarted
   when: not ansible_check_mode
+
+- name: Restart Pomerium Nova reconciler
+  ansible.builtin.systemd:
+    name: "{{ pomerium_nova_reconciler_service_name }}"
+    state: restarted
+  when:
+    - pomerium_nova_reconciler_supervision_enabled | bool
+    - not ansible_check_mode

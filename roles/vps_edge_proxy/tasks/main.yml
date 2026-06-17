@@ -80,6 +80,37 @@
       loop_control:
         label: "{{ item.name | default(item.dest | default('cert-bundle')) }}"
 
+    - name: Validate ACME certificate automation inputs
+      ansible.builtin.assert:
+        that:
+          - edge_proxy_acme_certificates is sequence
+          - edge_proxy_acme_certificates | length > 0
+          - not edge_proxy_acme_manage_certs | bool or edge_proxy_acme_email | length > 0
+          - not edge_proxy_acme_manage_certs | bool or edge_proxy_acme_authenticator | length > 0
+        fail_msg: "Set edge_proxy_acme_email, edge_proxy_acme_authenticator, and edge_proxy_acme_certificates before enabling ACME."
+        quiet: true
+      when: edge_proxy_acme_enabled | bool
+
+    - name: Validate ACME certificate mappings
+      ansible.builtin.assert:
+        that:
+          - item.name is match('^[A-Za-z0-9_.-]+$')
+          - item.domains is sequence
+          - item.domains | length > 0
+          - item.haproxy_pem is match('^/')
+        fail_msg: "Invalid edge_proxy_acme_certificates entry: {{ item.name | default('unnamed') }}"
+        quiet: true
+      loop: "{{ edge_proxy_acme_certificates }}"
+      loop_control:
+        label: "{{ item.name | default('acme-cert') }}"
+      when: edge_proxy_acme_enabled | bool
+
+    - name: Install OpenSSL for certificate validation
+      ansible.builtin.package:
+        name: openssl
+        state: present
+      when: edge_proxy_haproxy_cert_expiry_check_enabled | bool
+
     - name: Ensure HAProxy certificate directory exists
       ansible.builtin.file:
         path: "{{ edge_proxy_haproxy_cert_dir }}"
@@ -91,6 +122,53 @@
         (edge_proxy_haproxy_cert_bundles | default([]) | length > 0)
         or (edge_local_http_apps | default([]) | length > 0)
         or (edge_proxy_haproxy_local_tls_routes | default([]) | length > 0)
+        or edge_proxy_acme_enabled | bool
+
+    - name: Install certbot packages
+      ansible.builtin.package:
+        name: "{{ (edge_proxy_acme_certbot_packages[ansible_os_family] | default(edge_proxy_acme_certbot_packages.Debian)) + edge_proxy_acme_certbot_plugin_packages }}"
+        state: present
+      when: edge_proxy_acme_enabled | bool
+
+    - name: Ensure certbot deploy hook directory exists
+      ansible.builtin.file:
+        path: "{{ edge_proxy_acme_deploy_hook_path | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: edge_proxy_acme_enabled | bool
+
+    - name: Render certbot HAProxy PEM deploy hook
+      ansible.builtin.template:
+        src: edge-haproxy-pem-deploy.sh.j2
+        dest: "{{ edge_proxy_acme_deploy_hook_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when: edge_proxy_acme_enabled | bool
+
+    - name: Issue or renew ACME certificates
+      ansible.builtin.command: >-
+        certbot certonly
+        --non-interactive
+        --agree-tos
+        --keep-until-expiring
+        --cert-name {{ item.name | quote }}
+        --email {{ edge_proxy_acme_email | quote }}
+        --authenticator {{ edge_proxy_acme_authenticator | quote }}
+        --domains {{ (item.domains | join(',')) | quote }}
+        --deploy-hook {{ edge_proxy_acme_deploy_hook_path | quote }}
+        {% for arg in edge_proxy_acme_extra_args %}{{ arg | quote }} {% endfor %}
+      loop: "{{ edge_proxy_acme_certificates }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: edge_proxy_acme_certbot_runs
+      changed_when: "'Certificate not yet due for renewal' not in ((edge_proxy_acme_certbot_runs.stdout | default('')) ~ (edge_proxy_acme_certbot_runs.stderr | default('')))"
+      when:
+        - edge_proxy_acme_enabled | bool
+        - edge_proxy_acme_manage_certs | bool
+        - not ansible_check_mode
 
     - name: Copy combined HAProxy TLS PEM bundles
       ansible.builtin.copy:
@@ -138,6 +216,38 @@
       loop: "{{ edge_local_http_app_cert_stats.results | default([]) }}"
       loop_control:
         label: "{{ item.item.name | default(item.item.tls_cert) }}"
+
+    - name: Check local HAProxy TLS certificate expiry
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -checkend
+          - "{{ (edge_proxy_haproxy_cert_expiry_warning_days | int) * 86400 }}"
+          - -noout
+          - -in
+          - "{{ item.item.tls_cert }}"
+      loop: "{{ edge_local_http_app_cert_stats.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.name | default(item.item.tls_cert) }}"
+      register: edge_proxy_haproxy_cert_expiry_checks
+      changed_when: false
+      failed_when: edge_proxy_haproxy_cert_expiry_fail | bool and edge_proxy_haproxy_cert_expiry_checks.rc != 0
+      when:
+        - edge_proxy_haproxy_cert_expiry_check_enabled | bool
+        - item.stat.exists
+        - item.stat.isreg
+
+    - name: Report local HAProxy TLS certificates near expiry
+      ansible.builtin.debug:
+        msg: "Certificate {{ item.item.item.tls_cert }} expires within {{ edge_proxy_haproxy_cert_expiry_warning_days }} days."
+      loop: "{{ edge_proxy_haproxy_cert_expiry_checks.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.item.name | default(item.item.item.tls_cert) }}"
+      when:
+        - edge_proxy_haproxy_cert_expiry_check_enabled | bool
+        - not edge_proxy_haproxy_cert_expiry_fail | bool
+        - item.rc | default(0) != 0
 
     - name: Configure HAProxy edge proxy
       ansible.builtin.import_tasks: haproxy.yml

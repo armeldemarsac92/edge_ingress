@@ -1,0 +1,16 @@
+# Ansible managed: edge SSH hardening.
+{% if edge_security_ssh_disable_root_login | bool %}
+PermitRootLogin no
+{% endif %}
+{% if edge_security_ssh_password_authentication | string | length > 0 %}
+PasswordAuthentication {{ edge_security_ssh_password_authentication }}
+{% endif %}
+{% if edge_security_ssh_kbd_interactive_authentication | string | length > 0 %}
+KbdInteractiveAuthentication {{ edge_security_ssh_kbd_interactive_authentication }}
+{% endif %}
+{% if edge_security_ssh_pubkey_authentication | string | length > 0 %}
+PubkeyAuthentication {{ edge_security_ssh_pubkey_authentication }}
+{% endif %}
+{% if edge_security_ssh_permit_empty_passwords | string | length > 0 %}
+PermitEmptyPasswords {{ edge_security_ssh_permit_empty_passwords }}
+{% endif %}

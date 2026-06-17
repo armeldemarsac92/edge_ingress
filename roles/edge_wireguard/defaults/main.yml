@@ -3,7 +3,9 @@ edge_wireguard_mtu: 1380
 edge_wireguard_config_dir: /etc/wireguard
 edge_wireguard_key_dir: /etc/wireguard/keys
 edge_wireguard_hide_secrets: true
-edge_wireguard_vps_peer_allowed_ips: 0.0.0.0/0
+edge_wireguard_vps_peer_allowed_ips: []
+edge_wireguard_vps_peer_allowed_ips_extra: []
+edge_wireguard_vps_peer_allowed_ips_by_link: {}
 edge_wireguard_node_persistent_keepalive: 25
 edge_vps_loopback_addr: 10.255.255.1/32
 edge_vps_loopback_interface: lo

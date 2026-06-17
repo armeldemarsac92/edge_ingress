@@ -1,0 +1,14 @@
+[Unit]
+Description=OpenStack Pomerium Nova route reconciler
+Requires=docker.service
+After=docker.service network-online.target {{ pomerium_service_name }}.service
+Wants=network-online.target
+
+[Service]
+Restart=always
+RestartSec={{ pomerium_nova_reconciler_restart_sec }}
+ExecStart=/usr/bin/docker start -a {{ pomerium_nova_reconciler_container_name }}
+ExecStop=/usr/bin/docker stop -t 30 {{ pomerium_nova_reconciler_container_name }}
+
+[Install]
+WantedBy=multi-user.target

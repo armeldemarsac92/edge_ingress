@@ -15,6 +15,21 @@
     - edge_security_fail2ban_enabled | bool
     - not ansible_check_mode
 
+- name: Load auditd rules
+  ansible.builtin.command: "{{ edge_security_auditd_augenrules_binary }} --load"
+  changed_when: true
+  when:
+    - edge_security_auditd_enabled | bool
+    - not ansible_check_mode
+
+- name: Restart systemd-journald
+  ansible.builtin.systemd:
+    name: systemd-journald
+    state: restarted
+  when:
+    - edge_security_journald_retention_enabled | bool
+    - not ansible_check_mode
+
 - name: Reload HAProxy for security config
   ansible.builtin.systemd:
     name: "{{ edge_proxy_haproxy_service_name | default('haproxy') }}"

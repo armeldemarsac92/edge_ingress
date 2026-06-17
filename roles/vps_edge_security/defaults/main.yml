@@ -3,6 +3,12 @@ edge_security_enabled: false
 
 edge_security_crowdsec_enabled: false
 edge_security_fail2ban_enabled: false
+edge_security_auditd_enabled: true
+edge_security_ssh_hardening_enabled: true
+edge_security_journald_retention_enabled: true
+edge_security_reboot_required_check_enabled: true
+edge_security_reboot_required_fail: false
+edge_security_reboot_required_reboot: false
 
 edge_security_crowdsec_packages:
   Debian:
@@ -17,6 +23,62 @@ edge_security_fail2ban_packages:
     - fail2ban
   RedHat:
     - fail2ban
+
+edge_security_auditd_packages:
+  Debian:
+    - auditd
+  RedHat:
+    - audit
+
+edge_security_ssh_service_names:
+  Debian: ssh
+  RedHat: sshd
+
+edge_security_sshd_binary: /usr/sbin/sshd
+edge_security_ssh_config_dropin_dir: /etc/ssh/sshd_config.d
+edge_security_ssh_config_dropin_path: "{{ edge_security_ssh_config_dropin_dir }}/90-edge-hardening.conf"
+edge_security_ssh_disable_root_login: true
+edge_security_ssh_clear_root_authorized_keys: true
+edge_security_ssh_root_authorized_keys_path: /root/.ssh/authorized_keys
+edge_security_ssh_root_authorized_keys_backup_path: /root/.ssh/authorized_keys.ansible-disabled
+edge_security_ssh_password_authentication: "no"
+edge_security_ssh_kbd_interactive_authentication: "no"
+edge_security_ssh_pubkey_authentication: "yes"
+edge_security_ssh_permit_empty_passwords: "no"
+
+edge_security_auditd_rules_path: /etc/audit/rules.d/90-edge.rules
+edge_security_auditd_augenrules_binary: /usr/sbin/augenrules
+edge_security_auditd_watch_paths:
+  - path: /etc/ssh/sshd_config
+    key: sshd_config
+  - path: /etc/ssh/sshd_config.d
+    key: sshd_config
+  - path: /root/.ssh
+    key: root_ssh_keys
+  - path: /etc/sudoers
+    key: sudoers
+  - path: /etc/sudoers.d
+    key: sudoers
+  - path: /etc/systemd/system
+    key: systemd_units
+  - path: /etc/ufw
+    key: firewall
+  - path: /etc/nftables.d
+    key: firewall
+  - path: /etc/haproxy
+    key: haproxy
+  - path: /etc/wireguard
+    key: wireguard
+  - path: /opt/edge
+    key: edge_apps
+edge_security_auditd_extra_rules:
+  - "-a always,exit -F arch=b64 -S execve -C uid!=euid -F euid=0 -k privileged_exec"
+  - "-a always,exit -F arch=b32 -S execve -C uid!=euid -F euid=0 -k privileged_exec"
+
+edge_security_journald_config_dir: /etc/systemd/journald.conf.d
+edge_security_journald_config_path: "{{ edge_security_journald_config_dir }}/90-edge-retention.conf"
+edge_security_journald_max_retention_sec: 30day
+edge_security_journald_system_max_use: ""
 
 edge_security_crowdsec_services:
   - crowdsec

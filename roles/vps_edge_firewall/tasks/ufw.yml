@@ -29,6 +29,20 @@
   community.general.ufw:
     logging: "{{ edge_firewall_ufw_logging }}"
 
+- name: Validate admin SSH source scope
+  ansible.builtin.assert:
+    that:
+      - not edge_firewall_require_admin_ssh_sources | bool or edge_admin_ssh_sources | length > 0
+    fail_msg: "Set edge_admin_ssh_sources before requiring scoped SSH firewall access."
+    quiet: true
+
+- name: Validate WireGuard public source scope
+  ansible.builtin.assert:
+    that:
+      - not edge_firewall_require_wireguard_sources | bool or edge_firewall_wireguard_sources | length > 0
+    fail_msg: "Set edge_firewall_wireguard_sources before requiring scoped WireGuard firewall access."
+    quiet: true
+
 - name: Deny configured scanner sources
   community.general.ufw:
     rule: deny
@@ -42,12 +56,44 @@
   ansible.builtin.set_fact:
     edge_firewall_ufw_public_tcp_ports: >-
       {{
-        ([edge_firewall_ssh_port | int, 80, 443]
+        ([80, 443]
         + (edge_tcp_forwards | default([]) | map(attribute='public_port') | map('int') | list)
         + (edge_firewall_public_tcp_ports_extra | map('int') | list))
+        | reject('equalto', edge_firewall_ssh_port | int)
         | unique
         | list
       }}
+
+- name: Allow SSH from configured admin sources
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+    port: "{{ edge_firewall_ssh_port }}"
+    proto: tcp
+    comment: "Admin SSH"
+  loop: "{{ edge_admin_ssh_sources }}"
+  loop_control:
+    label: "{{ item }} -> {{ edge_firewall_ssh_port }}/tcp"
+  when: edge_admin_ssh_sources | length > 0
+
+- name: Allow SSH from anywhere when no admin source scope is configured
+  community.general.ufw:
+    rule: allow
+    port: "{{ edge_firewall_ssh_port }}"
+    proto: tcp
+    comment: "Admin SSH unrestricted"
+  when:
+    - edge_admin_ssh_sources | length == 0
+    - not edge_firewall_require_admin_ssh_sources | bool
+
+- name: Remove broad SSH allow when admin source scope is configured
+  community.general.ufw:
+    rule: allow
+    port: "{{ edge_firewall_ssh_port }}"
+    proto: tcp
+    delete: true
+  failed_when: false
+  when: edge_admin_ssh_sources | length > 0
 
 - name: Allow public TCP ports
   community.general.ufw:
@@ -69,6 +115,18 @@
     label: "{{ item.0 }} -> {{ item.1.value.vps_listen_port }}/udp"
   when: edge_firewall_wireguard_sources | length > 0
 
+- name: Remove broad WireGuard allows when source scope is configured
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.value.vps_listen_port }}"
+    proto: udp
+    delete: true
+  loop: "{{ wireguard_links | dict2items }}"
+  loop_control:
+    label: "{{ item.value.vps_listen_port }}/udp"
+  failed_when: false
+  when: edge_firewall_wireguard_sources | length > 0
+
 - name: Allow WireGuard ports from anywhere
   community.general.ufw:
     rule: allow
@@ -77,7 +135,9 @@
   loop: "{{ wireguard_links | dict2items }}"
   loop_control:
     label: "{{ item.value.vps_listen_port }}/udp"
-  when: edge_firewall_wireguard_sources | length == 0
+  when:
+    - edge_firewall_wireguard_sources | length == 0
+    - not edge_firewall_require_wireguard_sources | bool
 
 - name: Allow BGP from WireGuard peers
   community.general.ufw:

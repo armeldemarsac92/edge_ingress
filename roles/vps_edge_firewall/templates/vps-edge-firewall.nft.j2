@@ -24,6 +24,14 @@ table inet vps_edge_firewall {
 {% endfor %}
         };
     }
+{% if edge_firewall_wireguard_sources | length > 0 %}
+
+    set wireguard_udp_sources {
+        type ipv4_addr;
+        flags interval;
+        elements = { {{ edge_firewall_wireguard_sources | join(', ') }} };
+    }
+{% endif %}
 {% if edge_firewall_wireguard_tcp_sources | length > 0 and edge_firewall_wireguard_tcp_ports_extra | length > 0 %}
 
     set wireguard_tcp_sources {
@@ -46,7 +54,11 @@ table inet vps_edge_firewall {
         ip protocol icmp accept
 {% endif %}
         tcp dport {{ edge_firewall_ssh_port }} ip saddr @admin_ssh_sources accept
+{% if edge_firewall_wireguard_sources | length > 0 %}
+        udp dport @wireguard_udp_ports ip saddr @wireguard_udp_sources accept
+{% else %}
         udp dport @wireguard_udp_ports accept
+{% endif %}
 {% if edge_firewall_wireguard_tcp_sources | length > 0 and edge_firewall_wireguard_tcp_ports_extra | length > 0 %}
         tcp dport @wireguard_tcp_ports ip saddr @wireguard_tcp_sources accept
 {% endif %}

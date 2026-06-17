@@ -11,7 +11,7 @@ ListenPort = {{ wg_listen_port }}
 
 [Peer]
 PublicKey = {{ wg_peer_public_key }}
-AllowedIPs = {{ wg_peer_allowed_ips }}
+AllowedIPs = {{ wg_peer_allowed_ips if wg_peer_allowed_ips is string else (wg_peer_allowed_ips | join(', ')) }}
 {% if wg_peer_endpoint | string | length > 0 %}
 Endpoint = {{ wg_peer_endpoint }}
 {% endif %}

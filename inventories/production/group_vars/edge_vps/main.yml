@@ -19,6 +19,7 @@ edge_proxy_haproxy_crowdsec_enabled: true
 edge_openstack_domain: "{{ lookup('env', 'EDGE_OPENSTACK_DOMAIN') | default('openstack.' ~ edge_public_root_domain, true) }}"
 edge_openstack_backend_host: "{{ lookup('env', 'EDGE_OPENSTACK_BACKEND_HOST') | default('10.50.0.50', true) }}"
 edge_openstack_tls_cert_path: "{{ lookup('env', 'EDGE_OPENSTACK_TLS_CERT_PATH') | default('/etc/haproxy/certs/openstack.' ~ edge_public_root_domain ~ '.pem', true) }}"
+edge_openstack_acme_domains: "{{ lookup('env', 'EDGE_OPENSTACK_ACME_DOMAINS') | default(edge_openstack_domain, true) | split(',') | map('trim') | reject('equalto', '') | list }}"
 edge_proxy_haproxy_local_tls_routes:
   - name: openstack
     hostname_suffixes:
@@ -33,6 +34,22 @@ edge_proxy_haproxy_cert_bundles: >-
     ([authentik_haproxy_cert_bundle] if (authentik_haproxy_pem_src | length > 0 or (authentik_haproxy_cert_src | length > 0 and authentik_haproxy_key_src | length > 0)) else [])
     + ([pomerium_haproxy_cert_bundle] if (pomerium_haproxy_pem_src | length > 0 or (pomerium_haproxy_cert_src | length > 0 and pomerium_haproxy_key_src | length > 0)) else [])
   }}
+edge_proxy_acme_enabled: "{{ lookup('env', 'EDGE_ACME_ENABLED') | default('false', true) | bool }}"
+edge_proxy_acme_email: "{{ lookup('env', 'EDGE_ACME_EMAIL') | default('', true) }}"
+edge_proxy_acme_authenticator: "{{ lookup('env', 'EDGE_ACME_AUTHENTICATOR') | default('', true) }}"
+edge_proxy_acme_extra_args: "{{ lookup('env', 'EDGE_ACME_EXTRA_ARGS') | default('', true) | split(' ') | map('trim') | reject('equalto', '') | list }}"
+edge_proxy_acme_certbot_plugin_packages: "{{ lookup('env', 'EDGE_ACME_CERTBOT_PLUGIN_PACKAGES') | default('', true) | split(',') | map('trim') | reject('equalto', '') | list }}"
+edge_proxy_acme_certificates:
+  - name: "{{ authentik_domain }}"
+    domains:
+      - "{{ authentik_domain }}"
+    haproxy_pem: "{{ authentik_haproxy_cert_path }}"
+  - name: "{{ pomerium_authenticate_domain }}"
+    domains: "{{ pomerium_haproxy_hostnames }}"
+    haproxy_pem: "{{ pomerium_haproxy_cert_path }}"
+  - name: "{{ edge_openstack_domain }}"
+    domains: "{{ edge_openstack_acme_domains }}"
+    haproxy_pem: "{{ edge_openstack_tls_cert_path }}"
 
 edge_security_enabled: true
 edge_security_crowdsec_enabled: true
@@ -40,7 +57,10 @@ edge_security_fail2ban_enabled: true
 
 edge_firewall_enabled: true
 edge_firewall_backend: ufw
-edge_admin_ssh_sources: []
+edge_admin_ssh_sources: "{{ lookup('env', 'EDGE_ADMIN_SSH_SOURCES') | default('', true) | split(',') | map('trim') | reject('equalto', '') | list }}"
+edge_firewall_require_admin_ssh_sources: "{{ lookup('env', 'EDGE_FIREWALL_REQUIRE_ADMIN_SSH_SOURCES') | default('false', true) | bool }}"
+edge_firewall_wireguard_sources: "{{ lookup('env', 'EDGE_WIREGUARD_PUBLIC_SOURCES') | default('', true) | split(',') | map('trim') | reject('equalto', '') | list }}"
+edge_firewall_require_wireguard_sources: "{{ lookup('env', 'EDGE_FIREWALL_REQUIRE_WIREGUARD_SOURCES') | default('false', true) | bool }}"
 edge_firewall_denied_sources: []
 edge_firewall_wireguard_tcp_sources: "{{ edge_metrics_scrape_sources }}"
 edge_firewall_wireguard_tcp_ports_extra:

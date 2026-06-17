@@ -1,0 +1,56 @@
+#!/bin/sh
+# Ansible managed: rebuild HAProxy PEMs from Let's Encrypt live certs.
+set -eu
+
+changed=0
+
+install_pem() {
+    cert_name="$1"
+    dest="$2"
+    live_dir="/etc/letsencrypt/live/${cert_name}"
+
+    [ -s "${live_dir}/fullchain.pem" ] || return 0
+    [ -s "${live_dir}/privkey.pem" ] || return 0
+
+    tmp="$(mktemp)"
+    backup=""
+    cat "${live_dir}/fullchain.pem" "${live_dir}/privkey.pem" > "${tmp}"
+    chmod 0600 "${tmp}"
+
+    if [ -s "${dest}" ] && cmp -s "${tmp}" "${dest}"; then
+        rm -f "${tmp}"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "${dest}")"
+    if [ -e "${dest}" ]; then
+        backup="$(mktemp)"
+        cp -p "${dest}" "${backup}"
+    fi
+
+    install -o root -g root -m 0600 "${tmp}" "${dest}"
+    rm -f "${tmp}"
+
+    if [ -x /usr/sbin/haproxy ] && [ -f {{ edge_proxy_haproxy_config | quote }} ]; then
+        if ! /usr/sbin/haproxy -c -f {{ edge_proxy_haproxy_config | quote }}; then
+            if [ -n "${backup}" ]; then
+                install -o root -g root -m 0600 "${backup}" "${dest}"
+                rm -f "${backup}"
+            else
+                rm -f "${dest}"
+            fi
+            exit 1
+        fi
+    fi
+
+    [ -n "${backup}" ] && rm -f "${backup}"
+    changed=1
+}
+
+{% for cert in edge_proxy_acme_certificates %}
+install_pem {{ cert.name | quote }} {{ cert.haproxy_pem | quote }}
+{% endfor %}
+
+if [ "${changed}" -eq 1 ] && systemctl is-active --quiet {{ edge_proxy_haproxy_service_name | quote }}; then
+    systemctl reload {{ edge_proxy_haproxy_service_name | quote }}
+fi

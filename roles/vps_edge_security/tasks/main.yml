@@ -25,6 +25,168 @@
         state: present
       when: edge_security_fail2ban_enabled | bool
 
+    - name: Install auditd packages
+      ansible.builtin.package:
+        name: "{{ edge_security_auditd_packages[ansible_os_family] | default(edge_security_auditd_packages.Debian) }}"
+        state: present
+      when: edge_security_auditd_enabled | bool
+
+    - name: Validate SSH hardening access assumptions
+      ansible.builtin.assert:
+        that:
+          - not edge_security_ssh_disable_root_login | bool or (ansible_user | default('')) != 'root'
+          - not edge_security_ssh_clear_root_authorized_keys | bool or (ansible_user | default('')) != 'root'
+        fail_msg: "SSH hardening would disable root SSH while Ansible is connected as root. Set a non-root ansible_user or disable root key removal."
+        quiet: true
+      when: edge_security_ssh_hardening_enabled | bool
+
+    - name: Ensure SSH config drop-in directory exists
+      ansible.builtin.file:
+        path: "{{ edge_security_ssh_config_dropin_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: edge_security_ssh_hardening_enabled | bool
+
+    - name: Render SSH hardening drop-in
+      ansible.builtin.template:
+        src: sshd-edge-hardening.conf.j2
+        dest: "{{ edge_security_ssh_config_dropin_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: edge_security_ssh_dropin_render
+      when: edge_security_ssh_hardening_enabled | bool
+
+    - name: Validate SSH daemon configuration
+      ansible.builtin.command: "{{ edge_security_sshd_binary }} -t"
+      changed_when: false
+      when:
+        - edge_security_ssh_hardening_enabled | bool
+        - not ansible_check_mode
+
+    - name: Reload SSH after hardening changes
+      ansible.builtin.systemd:
+        name: "{{ edge_security_ssh_service_names[ansible_os_family] | default(edge_security_ssh_service_names.Debian) }}"
+        state: reloaded
+      when:
+        - edge_security_ssh_hardening_enabled | bool
+        - edge_security_ssh_dropin_render is changed
+        - not ansible_check_mode
+
+    - name: Check root authorized_keys
+      ansible.builtin.stat:
+        path: "{{ edge_security_ssh_root_authorized_keys_path }}"
+      register: edge_security_root_authorized_keys_stat
+      when:
+        - edge_security_ssh_hardening_enabled | bool
+        - edge_security_ssh_clear_root_authorized_keys | bool
+
+    - name: Preserve disabled root authorized_keys
+      ansible.builtin.copy:
+        src: "{{ edge_security_ssh_root_authorized_keys_path }}"
+        dest: "{{ edge_security_ssh_root_authorized_keys_backup_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+        remote_src: true
+        force: false
+      when:
+        - edge_security_ssh_hardening_enabled | bool
+        - edge_security_ssh_clear_root_authorized_keys | bool
+        - edge_security_root_authorized_keys_stat.stat.exists | default(false)
+
+    - name: Remove root authorized_keys after root SSH is disabled
+      ansible.builtin.file:
+        path: "{{ edge_security_ssh_root_authorized_keys_path }}"
+        state: absent
+      when:
+        - edge_security_ssh_hardening_enabled | bool
+        - edge_security_ssh_clear_root_authorized_keys | bool
+        - edge_security_root_authorized_keys_stat.stat.exists | default(false)
+
+    - name: Ensure journald retention config directory exists
+      ansible.builtin.file:
+        path: "{{ edge_security_journald_config_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      when: edge_security_journald_retention_enabled | bool
+
+    - name: Render journald retention config
+      ansible.builtin.template:
+        src: journald-edge-retention.conf.j2
+        dest: "{{ edge_security_journald_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart systemd-journald
+      when: edge_security_journald_retention_enabled | bool
+
+    - name: Check auditd watch paths
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop: "{{ edge_security_auditd_watch_paths }}"
+      loop_control:
+        label: "{{ item.path }}"
+      register: edge_security_auditd_watch_stats
+      when: edge_security_auditd_enabled | bool
+
+    - name: Render auditd edge rules
+      ansible.builtin.template:
+        src: auditd-edge.rules.j2
+        dest: "{{ edge_security_auditd_rules_path }}"
+        owner: root
+        group: root
+        mode: "0640"
+      notify: Load auditd rules
+      when: edge_security_auditd_enabled | bool
+
+    - name: Enable and start auditd
+      ansible.builtin.systemd:
+        name: auditd
+        enabled: true
+        state: started
+      when:
+        - edge_security_auditd_enabled | bool
+        - not ansible_check_mode
+
+    - name: Check whether a reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: edge_security_reboot_required_stat
+      when: edge_security_reboot_required_check_enabled | bool
+
+    - name: Report pending reboot requirement
+      ansible.builtin.debug:
+        msg: "The host reports /var/run/reboot-required. Schedule a maintenance reboot or set edge_security_reboot_required_reboot=true for this playbook run."
+      when:
+        - edge_security_reboot_required_check_enabled | bool
+        - edge_security_reboot_required_stat.stat.exists | default(false)
+        - not edge_security_reboot_required_fail | bool
+        - not edge_security_reboot_required_reboot | bool
+
+    - name: Stop when reboot is required and fail mode is enabled
+      ansible.builtin.fail:
+        msg: "The host reports /var/run/reboot-required. Reboot during a maintenance window before continuing."
+      when:
+        - edge_security_reboot_required_check_enabled | bool
+        - edge_security_reboot_required_stat.stat.exists | default(false)
+        - edge_security_reboot_required_fail | bool
+
+    - name: Reboot host when explicitly requested
+      ansible.builtin.reboot:
+        msg: "Rebooting to apply pending kernel/security updates."
+        reboot_timeout: 900
+      when:
+        - edge_security_reboot_required_check_enabled | bool
+        - edge_security_reboot_required_stat.stat.exists | default(false)
+        - edge_security_reboot_required_reboot | bool
+        - not ansible_check_mode
+
     - name: Set CrowdSec Prometheus listen address
       ansible.builtin.set_fact:
         edge_security_crowdsec_prometheus_listen_addr_effective: >-

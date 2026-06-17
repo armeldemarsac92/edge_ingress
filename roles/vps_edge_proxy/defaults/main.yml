@@ -15,6 +15,9 @@ edge_proxy_haproxy_config: /etc/haproxy/haproxy.cfg
 edge_proxy_haproxy_stats_socket: /run/haproxy/admin.sock
 edge_proxy_haproxy_cert_dir: /etc/haproxy/certs
 edge_proxy_haproxy_cert_bundles: []
+edge_proxy_haproxy_cert_expiry_check_enabled: true
+edge_proxy_haproxy_cert_expiry_warning_days: 30
+edge_proxy_haproxy_cert_expiry_fail: true
 edge_proxy_haproxy_local_tls_bind_host: 127.0.0.1
 edge_proxy_haproxy_local_tls_bind_port_base: 18443
 edge_proxy_haproxy_local_tls_routes: []
@@ -27,6 +30,8 @@ edge_proxy_haproxy_crowdsec_spoe_config: /etc/haproxy/crowdsec.cfg
 edge_proxy_haproxy_crowdsec_backend_name: crowdsec-spoa
 edge_proxy_haproxy_crowdsec_backend_host: 127.0.0.1
 edge_proxy_haproxy_crowdsec_backend_port: 9001
+edge_proxy_haproxy_strip_response_headers:
+  - X-Powered-By
 edge_local_http_apps: []
 
 edge_proxy_nginx_packages:
@@ -39,5 +44,21 @@ edge_proxy_nginx_packages:
 edge_proxy_haproxy_packages:
   Debian:
     - haproxy
+    - openssl
   RedHat:
     - haproxy
+    - openssl
+
+edge_proxy_acme_enabled: false
+edge_proxy_acme_manage_certs: true
+edge_proxy_acme_email: ""
+edge_proxy_acme_authenticator: ""
+edge_proxy_acme_extra_args: []
+edge_proxy_acme_certbot_packages:
+  Debian:
+    - certbot
+  RedHat:
+    - certbot
+edge_proxy_acme_certbot_plugin_packages: []
+edge_proxy_acme_deploy_hook_path: /etc/letsencrypt/renewal-hooks/deploy/edge-haproxy-pem
+edge_proxy_acme_certificates: []
