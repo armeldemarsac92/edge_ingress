@@ -31,5 +31,8 @@
     that:
       - wireguard_links[edge_wireguard_node_name] is defined
       - groups.edge_vps | length == 1
+      - (wireguard_links[edge_wireguard_node_name].node_listen_port | default(wireguard_links[edge_wireguard_node_name].vps_listen_port) | string) is match('^[0-9]+$')
+      - (wireguard_links[edge_wireguard_node_name].node_listen_port | default(wireguard_links[edge_wireguard_node_name].vps_listen_port) | int) >= 1
+      - (wireguard_links[edge_wireguard_node_name].node_listen_port | default(wireguard_links[edge_wireguard_node_name].vps_listen_port) | int) <= 65535
     quiet: true
   when: "'openstack_edge_nodes' in group_names"

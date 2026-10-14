@@ -5,6 +5,18 @@
     edge_wireguard_managed_interfaces:
       - "{{ wireguard_links[edge_wireguard_node_name].node_if }}"
 
+- name: Check existing OpenStack node WireGuard config
+  ansible.builtin.stat:
+    path: "{{ edge_wireguard_config_dir }}/{{ edge_wireguard_node_link.node_if }}.conf"
+  register: edge_wireguard_previous_config_stat
+
+- name: Read existing OpenStack node WireGuard config for reload selection
+  ansible.builtin.slurp:
+    src: "{{ edge_wireguard_config_dir }}/{{ edge_wireguard_node_link.node_if }}.conf"
+  register: edge_wireguard_previous_config
+  when: edge_wireguard_previous_config_stat.stat.exists
+  no_log: "{{ edge_wireguard_hide_secrets }}"
+
 - name: Render OpenStack node WireGuard config
   ansible.builtin.template:
     src: wg-quick.conf.j2
@@ -15,13 +27,25 @@
   vars:
     wg_interface_name: "{{ edge_wireguard_node_link.node_if }}"
     wg_address: "{{ edge_wireguard_node_link.node_addr }}"
-    wg_listen_port: "{{ edge_wireguard_node_link.node_listen_port | default('') }}"
+    wg_listen_port: "{{ edge_wireguard_node_link.node_listen_port | default(edge_wireguard_node_link.vps_listen_port) }}"
     wg_private_key: "{{ edge_wireguard_generated_private_keys[edge_wireguard_node_link.node_if] }}"
     wg_peer_public_key: "{{ hostvars[edge_wireguard_vps_inventory_name].edge_wireguard_generated_public_keys[edge_wireguard_node_link.vps_if] }}"
     wg_peer_allowed_ips: "{{ edge_wireguard_node_link.vps_addr.split('/')[0] }}/32, {{ hostvars[edge_wireguard_vps_inventory_name].edge_vps_loopback_addr | default(edge_vps_loopback_addr) }}"
     wg_peer_endpoint: "{{ hostvars[edge_wireguard_vps_inventory_name].edge_vps_public_endpoint }}:{{ edge_wireguard_node_link.vps_listen_port }}"
     wg_persistent_keepalive: "{{ edge_wireguard_node_persistent_keepalive }}"
-  notify: Restart WireGuard interfaces
+  notify: >-
+    {{
+      'Reload WireGuard interfaces'
+      if edge_wireguard_previous_config.content is defined
+      and (
+        edge_wireguard_previous_config.content | b64decode
+        | regex_replace('(?im)^[ \t]*ListenPort[ \t]*=[^\r\n]*(?:\r?\n|$)', '') | trim
+      ) == (
+        lookup('ansible.builtin.template', 'wg-quick.conf.j2')
+        | regex_replace('(?im)^[ \t]*ListenPort[ \t]*=[^\r\n]*(?:\r?\n|$)', '') | trim
+      )
+      else 'Restart WireGuard interfaces'
+    }}
   no_log: "{{ edge_wireguard_hide_secrets }}"
 
 - name: Enable and start OpenStack node WireGuard interface
