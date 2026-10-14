@@ -44,6 +44,14 @@ WireGuard private keys are generated and stored only on the target hosts under
 `/etc/wireguard/keys`. They are not stored in inventory and are not printed by
 Ansible tasks.
 
+Node UDP listen ports default to each link's `vps_listen_port`, so restarting
+`wg-quick` does not select a new random local port. Set `node_listen_port` on a
+link to choose a different fixed port. `PersistentKeepalive` remains 25 seconds.
+When an existing node config changes only `ListenPort`, the role reloads
+WireGuard through `wg syncconf`; it keeps the interface up and avoids stopping
+services that require it, including node forwarding/SNAT and private DNS.
+Address, MTU, or other config changes retain the existing restart behavior.
+
 ## Architecture
 
 ```text
